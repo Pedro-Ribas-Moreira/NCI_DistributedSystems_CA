@@ -1,0 +1,16 @@
+{
+  "name": "nci_distributed_systems",
+  "version": "1.0.0",
+  "description": "NCI Distributed Systems CA Project",
+  "license": "ISC",
+  "author": "Pedro Moreira",
+  "type": "commonjs",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.3",
+    "@grpc/proto-loader": "^0.8.0"
+  }
+}
