@@ -3,7 +3,7 @@ const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 
 // Path to proto file
-const PROTO_PATH = path.join(__dirname, './proto/server_stream.proto');
+const PROTO_PATH = path.join(__dirname, './proto/attendence.proto');
 
 // Load proto
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -14,27 +14,25 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
   oneofs: true,
 });
 
-const serverStreamProto = grpc.loadPackageDefinition(packageDefinition).serverstreamdemo;
+const attendenceProto = grpc.loadPackageDefinition(packageDefinition).attendence;
 
 // Create client
-const client = new serverStreamProto.ServerStreamService(
+const client = new attendenceProto.AttendenceService(
   'localhost:50053',
   grpc.credentials.createInsecure()
+
 );
 
+const requestMessage = {
+  student_id: '1' 
+};  
 // Make request to server
-const call = client.GetBooksByCategory({ category: 'programming' });
-
-// Receive multiple messages from server
-call.on('data', (book) => {
-  console.log('Received book:', book);
+client.SendAttenceConfirmation(requestMessage, (error, response) => {
+  if (error) {
+    console.error('Error:', error.message);
+    return;
+  }
+  
+  console.log('Received response:', response.confirmationResponse);
 });
 
-// Server finished sending all messages
-call.on('end', () => {
-  console.log('Server streaming completed');
-});
-
-call.on('error', (err) => {
-  console.error('Error:', err.message);
-});

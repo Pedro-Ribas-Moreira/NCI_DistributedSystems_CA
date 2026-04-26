@@ -3,50 +3,61 @@ const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 
 // Path to proto file
-const PROTO_PATH = path.join(__dirname, './proto/server_stream.proto');
+const PROTO_PATHS = [
+    path.join(__dirname, './proto/attendence.proto'),
+    // path.join(__dirname, './proto/quiz_dispatcher.proto'),
+    // path.join(__dirname, './proto/quiz_monitor.proto')
+];
 
-// Load proto
-const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
-  keepCase: true,
-  longs: String,
-  enums: String,
-  defaults: true,
-  oneofs: true,
+const packageDefinition = protoLoader.loadSync(PROTO_PATHS, {
+    keepCase: true,
+    longs: String,
+    enums: String,
+    defaults: true,
+    oneofs: true
 });
-const serverStreamProto = grpc.loadPackageDefinition(packageDefinition).serverstreamdemo;
+const attendenceProto = grpc.loadPackageDefinition(packageDefinition).attendence;
 
-
+    
 // Sample book data
-const books = [
-  { id: 1, title: 'Node Basics', category: 'programming' },
-  { id: 2, title: 'Advanced Node', category: 'programming' },
-  { id: 3, title: 'History of Europe', category: 'history' },
-  { id: 4, title: 'JavaScript Guide', category: 'programming' },
-  { id: 5, title: 'World War II', category: 'history' },
+const students = [
+  { id: 1, studentName: 'Pedro', checkInStatus: 'false' },
+  { id: 2, studentName: 'Maria', checkInStatus: 'true' },
+  { id: 3, studentName: 'João', checkInStatus: 'false' },
+  { id: 4, studentName: 'Ana', checkInStatus: 'true' },
+  { id: 5, studentName: 'Carlos', checkInStatus: 'false' },
 ];
 
 // Server streaming method
 // Client sends one request, server writes many responses
-function getBooksByCategory(call) {
-  const requestedCategory = call.request.category.toLowerCase();
+function SendAttenceConfirmation(call, callback) {
 
-  const filteredBooks = books.filter(
-    (book) => book.category.toLowerCase() === requestedCategory
-  );
+  const studentId = call.request.student_id;
+  console.log({studentId})
+  let response = "";
 
-  // Send each matching record one by one
-  filteredBooks.forEach((book) => {
-    call.write(book);
-  });
+  //find the student in the list
+    const student = students.find(s => s.id === parseInt(studentId));
+    if (student) {
+        if(student.checkInStatus === 'true') {
+            student.checkInStatus = 'false';
+        } else {
+            student.checkInStatus = 'true';
+        }
+        response = `Student ${student.studentName} has checked in with status: ${student.checkInStatus}`;
+    } else {
+        response = `Student with ID ${studentId} not found.`;
+    }
+      console.log({response})
 
-  // End the stream after all data is sent
-  call.end();
+  callback(null, { confirmationResponse: response });
+
 }
 // Create server
 const server = new grpc.Server();
 
-server.addService(serverStreamProto.ServerStreamService.service, {
-  GetBooksByCategory: getBooksByCategory,
+server.addService(attendenceProto.AttendenceService.service, {
+  SendAttenceConfirmation: SendAttenceConfirmation,
 });
 
 // Start server
