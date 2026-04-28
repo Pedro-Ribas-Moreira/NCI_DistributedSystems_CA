@@ -1,6 +1,9 @@
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
+const studentsList = require('./assets/students.js');
+
+  console.log({studentsList})
 
 // Path to proto file
 const PROTO_PATHS = [
@@ -19,25 +22,16 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATHS, {
 const attendenceProto = grpc.loadPackageDefinition(packageDefinition).attendence;
 
     
-// Sample book data
-const students = [
-  { id: 1, studentName: 'Pedro', checkInStatus: 'false' },
-  { id: 2, studentName: 'Maria', checkInStatus: 'true' },
-  { id: 3, studentName: 'João', checkInStatus: 'false' },
-  { id: 4, studentName: 'Ana', checkInStatus: 'true' },
-  { id: 5, studentName: 'Carlos', checkInStatus: 'false' },
-];
 
 // Server streaming method
 // Client sends one request, server writes many responses
 function SendAttenceConfirmation(call, callback) {
 
   const studentId = call.request.student_id;
-  console.log({studentId})
   let response = "";
 
   //find the student in the list
-    const student = students.find(s => s.id === parseInt(studentId));
+    const student = studentsList.find(s => s.id === parseInt(studentId));
     if (student) {
         if(student.checkInStatus === 'true') {
             student.checkInStatus = 'false';
