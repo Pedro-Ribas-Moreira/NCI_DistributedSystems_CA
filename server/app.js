@@ -7,6 +7,7 @@ const quizList = require('./assets/quiz_questions.js');
   console.log({studentsList})
   console.log({quizList})
 
+  // console.log()
 
 // Path to proto file
 const PROTO_PATHS = [
@@ -50,7 +51,37 @@ function SendAttenceConfirmation(call, callback) {
 
 
 // Quiz Dispatcher Service
-// server streameer for quiz dispatching
+// server stream get request to send quiz.
+// check if quiz is active, if so send quiz content, if not send message that quiz is not active
+
+function GetActiveQuiz(call) {
+    const activeQuiz = quizList.quiz_list.find(q => q.status === 'active');
+    if (!activeQuiz) {
+        console.log(`[QUIZ] No active quiz available.`);
+        call.write({
+                id: 0,
+                questionTitle: "There is no active quiz available.",
+                questionOptions: [],
+                questionAnswer: ""
+        });
+
+    } else {
+        for (const question of activeQuiz.questions) {
+          console.log(question.question_id, question.question, question.options, question.correct)
+            call.write({
+                id: question.question_id,
+                questionTitle: question.question,
+                questionOptions: question.options, // Pass the array directly!
+                questionAnswer: question.correct
+            });
+        }
+        console.log(`[QUIZ] Streamed ${activeQuiz.questions.length} questions.`);
+    }
+
+    call.end();
+}
+    //find the quiz in the list
+
 // function DispatchQuiz(call) {
 //   const quizId = call.request.quiz_id;
 //   const quizContent = `Quiz content for quiz ID: ${quizId}`; // Simulated quiz content
@@ -62,6 +93,10 @@ const server = new grpc.Server();
 
 server.addService(educationProto.AttendenceService.service, {
   SendAttenceConfirmation: SendAttenceConfirmation,
+});
+
+server.addService(educationProto.ServerStreamQuiz.service, {
+    GetActiveQuiz: GetActiveQuiz,
 });
 
 // Start server
