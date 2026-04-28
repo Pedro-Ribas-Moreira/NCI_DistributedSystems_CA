@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package education;
+
+// First Service - Student Check-In (Attendence)
+// Student send message with their student_id and receive a confirmation back from server
+
+// simple RPC:
+// client sends one request
+// server sends one response
+
+service AttendenceService {
+  rpc SendAttenceConfirmation (StudentCheckIn) returns (ConfirmationResponse);
+}
+
+message StudentCheckIn {
+  string student_id = 1;
+}
+
+message ConfirmationResponse {
+  string confirmationResponse = 1;
+}
+
+
+// Second Service - Quiz Dispatcher
+// Server student will request the quiz, server will stream the questions. 
+
+service ServerStreamQuiz {
+  rpc GetActiveQuiz (QuizRequest) returns (stream BookResponse);
+}
+
+message CategoryRequest {
+  string category = 1;
+}
+
+message BookResponse {
+  int32 id = 1;
+  string title = 2;
+  string category = 3;
+}

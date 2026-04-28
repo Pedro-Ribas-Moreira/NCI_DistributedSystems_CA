@@ -2,12 +2,15 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const studentsList = require('./assets/students.js');
+const quizList = require('./assets/quiz_questions.js');
 
   console.log({studentsList})
+  console.log({quizList})
+
 
 // Path to proto file
 const PROTO_PATHS = [
-    path.join(__dirname, './proto/attendence.proto'),
+    path.join(__dirname, './proto/education.proto'),
     // path.join(__dirname, './proto/quiz_dispatcher.proto'),
     // path.join(__dirname, './proto/quiz_monitor.proto')
 ];
@@ -19,12 +22,9 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATHS, {
     defaults: true,
     oneofs: true
 });
-const attendenceProto = grpc.loadPackageDefinition(packageDefinition).attendence;
+const educationProto = grpc.loadPackageDefinition(packageDefinition).education;
 
-    
-
-// Server streaming method
-// Client sends one request, server writes many responses
+// Student Check-in Service
 function SendAttenceConfirmation(call, callback) {
 
   const studentId = call.request.student_id;
@@ -43,14 +43,24 @@ function SendAttenceConfirmation(call, callback) {
         response = `Student with ID ${studentId} not found.`;
     }
       console.log({response})
-
   callback(null, { confirmationResponse: response });
 
 }
+
+
+
+// Quiz Dispatcher Service
+// server streameer for quiz dispatching
+// function DispatchQuiz(call) {
+//   const quizId = call.request.quiz_id;
+//   const quizContent = `Quiz content for quiz ID: ${quizId}`; // Simulated quiz content
+
+//   // Simulate streaming quiz content in chunks
+
 // Create server
 const server = new grpc.Server();
 
-server.addService(attendenceProto.AttendenceService.service, {
+server.addService(educationProto.AttendenceService.service, {
   SendAttenceConfirmation: SendAttenceConfirmation,
 });
 
