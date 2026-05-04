@@ -5,12 +5,24 @@ package education;
 // First Service - Student Check-In (Attendence)
 // Student send message with their student_id and receive a confirmation back from server
 
-// simple RPC:
-// client sends one request
-// server sends one response
+service EducationService {
 
-service AttendenceService {
-  rpc SendAttenceConfirmation (StudentCheckIn) returns (ConfirmationResponse);
+// simple RPC:
+  rpc StudentAttendenceCheckIn (StudentCheckIn) returns (ConfirmationResponse);
+  rpc StudentQuizRequest (QuizDispatcherRequest) returns ( QuizDispatcherResponse);
+  rpc StudentQuizSubmission (stream QuizSubmissionRequest) returns (stream QuizSubmissionResponse);
+// client streaming
+  rpc StudentTelemetry (stream StudentTelemetryRequest) returns (StudentTelemetryResponse);
+
+
+// server streaming
+  rpc ProfessorAttendenceTracker (ProfessorAttendenceTrackerRequest) returns (stream ProfessorAttendenceTrackerResponse);
+  rpc ProfessorQuizTracer (ProfessorQuizTracerRequest) returns (stream ProfessorQuizTracerResponse);
+
+
+// bidirectional streaming  
+  rpc ProfessorLiveTracker (stream ProfessorLiveTrackerRequest) returns (stream ProfessorLiveTrackerResponse);
+
 }
 
 message StudentCheckIn {
@@ -22,21 +34,25 @@ message ConfirmationResponse {
 }
 
 
-// Second Service - Quiz Dispatcher
-// Server student will request the quiz, server will stream the questions. 
+message ProfessorAttendenceTrackerRequest {
+  string professor_id = 1;
+} 
 
-service ServerStreamQuiz {
-  rpc GetActiveQuiz (QuizRequest) returns (stream QuizResponse);
+message ProfessorAttendenceTrackerResponse {
+  string student_id = 1;
+  string student_name = 2;
+  string student_location = 3;
+  string student_attendance_status = 4;
+  string message = 5;
 }
 
-message QuizRequest {
-  string quizRequest = 1;
+message ProfessorQuizTracerRequest {
+  string professor_id = 1;
 }
 
-message QuizResponse {
-  int32 id = 1;
-  string questionTitle = 2;
-  repeated string questionOptions = 3;
-  string questionAnswer = 4;
+message ProfessorQuizTracerResponse {
+  string student_id = 1;
+  string student_name = 2;
+  string quiz_status = 3;
+  string message = 4;
 }
-

@@ -5,16 +5,18 @@ const studentsList = require('./assets/students.js');
 const quizList = require('./assets/quiz_questions.js');
 
 
-console.log({studentsList})
-console.log({quizList})
-
 let professorStream = null; // To hold the professor's stream for monitoring quiz and attendance status. 
+
+  console.log({studentsList})
+  console.log({quizList})
 
   // console.log()
 
 // Path to proto file
 const PROTO_PATHS = [
     path.join(__dirname, './proto/education.proto'),
+    // path.join(__dirname, './proto/quiz_dispatcher.proto'),
+    // path.join(__dirname, './proto/quiz_monitor.proto')
 ];
 
 const packageDefinition = protoLoader.loadSync(PROTO_PATHS, {
@@ -27,22 +29,10 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATHS, {
 const educationProto = grpc.loadPackageDefinition(packageDefinition).education;
 
 // Professor connection for monitoring quiz and attendance status
-const ProfessorAttendenceTracker =  (call) => {
+const ProfessorLiveTracker =  (call) => {
     professorStream = call; // Store the stream for later use 
 
-    call.write({ 
-//           string student_id = 1;
-//   string student_name = 2;
-//   string student_location = 3;
-//   string student_attendance_status = 4;
-//   string message = 5;
-        student_id: "N/A",
-        student_name: "N/A",
-        student_location: "N/A",
-        student_attendance_status: "N/A",
-        message: 'Welcome Professor! You are now connected to the live tracker.'
-
-     });
+    call.write({ message: 'Welcome Professor! You are now connected to the live tracker.' });
 
 
     call.on('end', () => {
@@ -52,13 +42,16 @@ const ProfessorAttendenceTracker =  (call) => {
     });
 
     call.on('error', (err) => {
-        console.error('Error in ProfessorAttendenceTracker stream:', err);
+        console.error('Error in ProfessorLiveTracker stream:', err);
         professorStream = null; // Clear the stream on error
     });
 
     console.log('Professor connected to live tracker.');
 
 }
+
+
+
 
 
 // Student Check-in Service
@@ -78,11 +71,9 @@ function SendAttenceConfirmation(call, callback) {
         response = `Student ${student.studentName} has checked in with status: ${student.checkInStatus}`;
         if(professorStream) {
           professorStream.write({ // Send real-time update to professor
-                studentId: student.id,  
-                studentName: student.studentName,
-                studentLocation: student.location,
-                studentAttendanceStatus: student.checkInStatus,
-                message: `Student ${student.studentName} has checked in with status: ${student.checkInStatus}`
+              studentId: student.id,
+              studentName: student.studentName,
+              checkInStatus: student.checkInStatus
           });
         }
     } else {
@@ -94,12 +85,61 @@ function SendAttenceConfirmation(call, callback) {
 }
 
 
+
+// Quiz Dispatcher Service
+// server stream get request to send quiz.
+// check if quiz is active, if so send quiz content, if not send message that quiz is not active
+
+function GetActiveQuiz(call) {
+    const activeQuiz = quizList.quiz_list.find(q => q.status === 'active');
+    if (!activeQuiz) {
+        console.log(`[QUIZ] No active quiz available.`);
+        call.write({
+                id: 0,
+                questionTitle: "There is no active quiz available.",
+                questionOptions: [],
+                questionAnswer: ""
+        });
+
+    } else {
+        for (const question of activeQuiz.questions) {
+          console.log(question.question_id, question.question, question.options, question.correct)
+            call.write({
+                id: question.question_id,
+                questionTitle: question.question,
+                questionOptions: question.options, // Pass the array directly!
+                questionAnswer: question.correct
+            });
+        }
+        console.log(`[QUIZ] Streamed ${activeQuiz.questions.length} questions.`);
+    }
+
+    call.end();
+}
+    //find the quiz in the list
+
+// function DispatchQuiz(call) {
+//   const quizId = call.request.quiz_id;
+//   const quizContent = `Quiz content for quiz ID: ${quizId}`; // Simulated quiz content
+
+//   // Simulate streaming quiz content in chunks
+
+// Create server
 const server = new grpc.Server();
 
-server.addService(educationProto.EducationService.service, {
+server.addService(educationProto.AttendenceService.service, {
   SendAttenceConfirmation: SendAttenceConfirmation,
-  ProfessorAttendenceTracker: ProfessorAttendenceTracker
 });
+
+server.addService(educationProto.ServerStreamQuiz.service, {
+    GetActiveQuiz: GetActiveQuiz,
+});
+
+server.addService(educationProto.ProfessorLiveTracker.service, {
+    ProfessorLiveTracker: ProfessorLiveTracker,
+} )
+
+
 
 // Start server
 server.bindAsync(
