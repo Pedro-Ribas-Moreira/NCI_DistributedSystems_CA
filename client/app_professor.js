@@ -25,27 +25,56 @@ const client = new educationProto.EducationService(
 
 
 console.log('--- LIVE PROFESSOR DASHBOARD ---');
-console.log('Waiting for students to check in...\n');
-
 // Initiate the stream
 const call = client.ProfessorAttendenceTracker({ professor_id: 'prof_123' });
 
 // Listen for real-time updates from the server
 call.on('data', (response) => {
     // Clear the console to simulate a "refreshing" UI dashboard
-    console.clear(); 
     console.log('--- LIVE CLASS ROSTER ---');
     console.log(`Last Updated: ${new Date().toLocaleTimeString()}\n`);
-
-    // Loop through the roster and display who is online/offline
-    // response.student_roster.forEach(student => {
-    //     const statusIcon = student.is_checked_in ? '🟢 ONLINE' : '🔴 OFFLINE';
-    //     console.log(`[${statusIcon}] ${student.student_name} (ID: ${student.student_id})`);
-    // });
     console.log(response);
 });
 
 call.on('error', (err) => {
     console.error('Dashboard Error:', err.message);
 });
+
+
+console.log('Requesting active quiz from server...');
+const quizCall = client.ProfessorQuizTracker({ professor_id: 'prof_123', quiz_id: 1 });
+
+quizCall.on('data', (response) => {
+    console.log('--- ACTIVE QUIZ UPDATE ---');
+    console.log(`Last Updated: ${new Date().toLocaleTimeString()}\n`);
+    console.log(response);
+});
+
+quizCall.on('error', (err) => {
+    console.error('Quiz Tracker Error:', err.message);
+});
+
+quizCall.on('end', () => {
+    console.log('Quiz stream ended by server.');
+});
+
+
+// activate quiz
+
+const requestMessage = {
+  professor_id: 'prof_123' ,
+  quiz_id: '1',
+}; 
+
+ 
+// Make request to server
+client.ProfessorQuizActivation(requestMessage, (error, response) => {
+  if (error) {
+    console.error('Error:', error.message);
+    return;
+  }
+  
+  console.log('Received response:', response.message);
+});
+
 

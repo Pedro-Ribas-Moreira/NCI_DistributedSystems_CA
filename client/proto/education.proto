@@ -6,27 +6,111 @@ package education;
 // Student send message with their student_id and receive a confirmation back from server
 
 service EducationService {
-  rpc SendAttenceConfirmation (StudentCheckIn) returns (ConfirmationResponse);
-  rpc ProfessorAttendenceTracker (ProfessorAttendenceTrackerRequest) returns (stream ProfessorAttendenceTrackerResponse);
+// simple RPC:
+  rpc StudentAttendenceCheckIn (StudentCheckIn) returns (StudentCheckInResponse); //DONE
+  rpc StudentQuizRequest (StudentQuizRequest) returns ( StudentQuizResponse);
+  rpc ProfessorQuizActivation (ProfessorQuizActivationRequest) returns (ProfessorQuizActivationResponse);
+// client streaming
+  rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
+  rpc StudentTelemetry (stream StudentTelemetryRequest) returns (StudentTelemetryResponse);
+// server streaming
+  rpc ProfessorAttendenceTracker (ProfessorAttendenceTrackerRequest) returns (stream ProfessorAttendenceTrackerResponse); // DONE
+// bidirectional streaming  
+  rpc ProfessorQuizTracker (stream ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
 }
 
+// MESSAGES
+//   rpc StudentAttendenceCheckIn (StudentCheckIn) returns (ConfirmationResponse); //DONE
 message StudentCheckIn {
   string student_id = 1;
+  string student_location = 2;
 }
 
-message ConfirmationResponse {
-  string confirmationResponse = 1;
+message StudentCheckInResponse {
+  string confirmation_response = 1;
 }
 
+
+// rpc StudentQuizRequest (StudentQuizRequest) returns ( StudentQuizResponse);
+  message StudentQuizRequest {
+  int32 quiz_id = 1;
+  string student_id = 2;
+}
+
+message StudentQuizResponse {
+  int32 quiz_id = 1;
+  string quiz_title = 2;
+  repeated string quiz_questions = 3;
+  string message = 4;
+}
+
+//   rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
+
+message StudentQuizSubmissionRequest {
+  string student_id = 1;
+  int32 quiz_id = 2;
+  string submitted_answers = 3;
+} 
+
+
+message StudentQuizSubmissionResponse {
+  string student_id = 1;
+  int32 quiz_id = 2;
+  string submission_status = 3;
+  string feedback = 4;
+}
+
+
+// client streaming  rpc StudentTelemetry (stream StudentTelemetryRequest) returns (StudentTelemetryResponse);
+
+message StudentTelemetryRequest {
+  string student_id = 1;
+  string activity_type = 2;
+  string activity_timestamp = 3;
+}
+
+message StudentTelemetryResponse {
+  string student_id = 1;
+  string telemetry_status = 2;
+  string message = 3;
+}
+
+// server streaming  rpc ProfessorAttendenceTracker (ProfessorAttendenceTrackerRequest) returns (stream ProfessorAttendenceTrackerResponse); // DONE
 
 message ProfessorAttendenceTrackerRequest {
   string professor_id = 1;
 } 
 
 message ProfessorAttendenceTrackerResponse {
+  // gets an array of students with their attendance status, location, and name
+  // every time a new student checks in, the server will send an updated list to the professor
+  repeated string student_attendance_info = 1;
+  string message = 2;
+  
+}
+
+
+// bidirectional streaming rpc ProfessorQuizTracker (stream ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
+
+
+message ProfessorQuizTrackerRequest {
+  string professor_id = 1;
+  string student_id = 2;
+  int32 quiz_id = 3;
+}
+
+message ProfessorQuizTrackerResponse {
   string student_id = 1;
   string student_name = 2;
-  string student_location = 3;
-  string student_attendance_status = 4;
+  repeated string student_quiz_info = 3;
   string message = 5;
+}
+
+message ProfessorQuizActivationRequest {
+  string professor_id = 1;
+  int32 quiz_id = 2;
+}
+message ProfessorQuizActivationResponse {
+
+  string message = 4;
 }

@@ -31,7 +31,6 @@ const ProfessorAttendenceTracker =  (call) => {
     professorAttendenceStream = call; // Store the stream for later use 
 
     //   repeated StudentAttendanceInfo student_attendance_info = 1;
-
     call.write({student_attendance_info: studentsList, message: "Initial student attendance status."}); // Send initial attendance status to professor
 
 
@@ -94,6 +93,24 @@ const ProfessorQuizTracker = (call) => {
     });
 
 
+
+}
+
+const ProfessorQuizActivation = (call, callback) => {
+    const quizId = call.request.quiz_id;
+    
+    //find the quiz in the list
+    const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
+    if (quiz) {
+        if(quiz.status === 'active') {
+            callback(null, { message: `Quiz ${quiz.title} is already active.` });
+        } else {
+            quiz.status = 'active';
+            callback(null, { message: `Quiz ${quiz.title} is now active.` });
+        }
+    } else {
+        callback(null, { message: `Quiz with ID ${quizId} not found.` });
+    }
 }
 
 
@@ -142,6 +159,7 @@ const StudentQuizRequest = (call, callback) => {
     const studentId = call.request.student_id;
     const quizId = call.request.quiz_id;
 
+    console.log(`Received quiz request from student ${studentId} for quiz ${quizId}.`);
 //       string student_id = 1;
 //   string student_name = 2;
 //   repeated string student_quiz_info = 3;
@@ -149,9 +167,66 @@ const StudentQuizRequest = (call, callback) => {
     
     //find the quiz in the list
     const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
+    if (quiz) {
+        if(quiz.status === 'active') {
+            const studentQuizInfo = quiz.questions.map(q => q.question);
+            callback(null, {
+                quiz_id: quiz.id,
+                quiz_title: quiz.title,
+                quiz_questions: studentQuizInfo,
+                message: `Quiz ${quiz.title} is active. Here are the questions.`
+            });
+        } else {
+            callback(null, {
+                quiz_id: quiz.id,
+                quiz_title: quiz.title,
+                quiz_questions: [],
+                message: `Quiz ${quiz.title} is not active yet. Please wait for the professor to activate it.`
+            });
+        }
+    } else {
+        callback(null, {
+            quiz_id: parseInt(quizId),
+            quiz_title: "N/A",
+            quiz_questions: [],
+            message: `Quiz with ID ${quizId} not found.`
+        });
+    }
 }
 
+
+// //   rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
+
+// message StudentQuizSubmissionRequest {
+//   string student_id = 1;
+//   int32 quiz_id = 2;
+//   string submitted_answers = 3;
+// } 
+
 const StudentQuizSubmission = (call, callback) => {
+    // 
+    call.on('data', (submission) => {
+        console.log('Received quiz submission from student:', submission);
+        // Here you can process the quiz submission as needed, e.g., store it in a database or analyze it.
+        const quiz = quizList.quiz_list.find(q => q.id === parseInt(submission.quiz_id));
+        if (quiz) {
+            const studentQuizInfo = quiz.questions.map(q => q.question);
+            if(professorQuizStream) {
+                professorQuizStream.write({
+                    student_id: submission.student_id,
+                    student_name: `Student ${submission.student_id}`,
+                    student_quiz_info: studentQuizInfo,
+                    message: `Student ${submission.student_id} submitted answers for quiz ${quiz.title}.`
+                });
+            }
+        }   
+    }
+    );
+
+    call.on('end', () => {
+        console.log('Student finished submitting quiz answers.');
+        callback(null, { message: 'Quiz submission received successfully.' });
+    });
 
 }
 
@@ -164,6 +239,7 @@ const server = new grpc.Server();
 server.addService(educationProto.EducationService.service, {
     ProfessorAttendenceTracker: ProfessorAttendenceTracker,
     ProfessorQuizTracker: ProfessorQuizTracker,
+    ProfessorQuizActivation: ProfessorQuizActivation,
     StudentQuizRequest: StudentQuizRequest,
     StudentAttendenceCheckIn: StudentAttendenceCheckIn,
     StudentQuizSubmission: StudentQuizSubmission,
