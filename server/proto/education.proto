@@ -39,7 +39,7 @@ message StudentCheckInResponse {
 message StudentQuizResponse {
   int32 quiz_id = 1;
   string quiz_title = 2;
-  repeated QuizQuestion quiz_questions = 3;
+  repeated string quiz_questions = 3;
 }
 
 //   rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
@@ -82,8 +82,8 @@ message ProfessorAttendenceTrackerRequest {
 message ProfessorAttendenceTrackerResponse {
   // gets an array of students with their attendance status, location, and name
   // every time a new student checks in, the server will send an updated list to the professor
-  repeated StudentAttendanceInfo student_attendance_info = 1;
-  string message = 2
+  repeated string student_attendance_info = 1;
+  string message = 2;
   
 }
 
@@ -100,6 +100,6 @@ message ProfessorQuizTrackerRequest {
 message ProfessorQuizTrackerResponse {
   string student_id = 1;
   string student_name = 2;
-  repeated StudentQuizInfo student_quiz_info = 3;
+  repeated string student_quiz_info = 3;
   string message = 5;
 }

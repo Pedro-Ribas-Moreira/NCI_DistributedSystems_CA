@@ -25,65 +25,28 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATHS, {
 });
 const educationProto = grpc.loadPackageDefinition(packageDefinition).education;
 
+
 // Professor connection for monitoringattendance status
 const ProfessorAttendenceTracker =  (call) => {
     professorAttendenceStream = call; // Store the stream for later use 
 
-    call.write({ 
-        student_id: "N/A",
-        student_name: "N/A",
-        student_location: "N/A",
-        student_attendance_status: "N/A",
-        message: 'Welcome Professor! You are now connected to the live tracker.'
+    //   repeated StudentAttendanceInfo student_attendance_info = 1;
 
-     });
+    call.write({student_attendance_info: studentsList, message: "Initial student attendance status."}); // Send initial attendance status to professor
 
 
     call.on('end', () => {
         console.log('Professor disconnected from live tracker.');
-        professorStream = null; // Clear the stream when professor disconnects
+        professorAttendenceStream = null; // Clear the stream when professor disconnects
         call.end();
     });
 
     call.on('error', (err) => {
         console.error('Error in ProfessorAttendenceTracker stream:', err);
-        professorStream = null; // Clear the stream on error
+        professorAttendenceStream = null; // Clear the stream on error
     });
 
     console.log('Professor connected to live tracker.');
-
-}
-
-
-// Student Check-in Service
-const SendAttenceConfirmation = (call, callback) =>{
-
-  const studentId = call.request.student_id;
-  let response = "";
-
-  //find the student in the list
-    const student = studentsList.find(s => s.id === parseInt(studentId));
-    if (student) {
-        if(student.checkInStatus === 'true') {
-            student.checkInStatus = 'false';
-        } else {
-            student.checkInStatus = 'true';
-        }
-        response = `Student ${student.studentName} has checked in with status: ${student.checkInStatus}`;
-        if(professorStream) {
-          professorStream.write({ // Send real-time update to professor
-                studentId: student.id,  
-                studentName: student.studentName,
-                studentLocation: student.location,
-                studentAttendanceStatus: student.checkInStatus,
-                message: `Student ${student.studentName} has checked in with status: ${student.checkInStatus}`
-          });
-        }
-    } else {
-        response = `Student with ID ${studentId} not found.`;
-    }
-      console.log({response})
-  callback(null, { confirmationResponse: response });
 
 }
 
@@ -133,12 +96,78 @@ const ProfessorQuizTracker = (call) => {
 
 }
 
+
+// Student Check-in Service
+const StudentAttendenceCheckIn = (call, callback) =>{
+
+  const studentId = call.request.student_id;
+  let response = "";
+
+  //find the student in the list
+    const student = studentsList.find(s => s.id === parseInt(studentId));
+    if (student) {
+        if(student.checkInStatus === 'true') {
+            response = `You have already checked in.`;
+
+        } else {
+            student.checkInStatus = 'true';
+            student.location = call.request.student_location; 
+            response = `Cheked in successfully.`;   
+            if(professorAttendenceStream) {
+                professorAttendenceStream.write({ student_attendance_info: studentsList, message: `Student ${student.studentName} checked in from location ${student.location}.`});
+            }
+        }
+    } else {
+        response = `Student with ID ${studentId} not found.`;
+    }
+  console.log("Student Check-in Request:", call.request);
+  callback(null, { confirmationResponse: response });
+
+}
+
+// client side streamning   rpc StudentTelemetry (stream StudentTelemetryRequest) returns (StudentTelemetryResponse);
+
+const StudentTelemetry = (call, callback) => {
+    call.on('data', (telemetryData) => {
+        console.log('Received telemetry data from student:', telemetryData);
+        // Here you can process the telemetry data as needed, e.g., store it in a database or analyze it.
+    });
+
+    call.on('end', () => {
+        console.log('Student finished sending telemetry data.');
+        callback(null, { message: 'Telemetry data received successfully.' });
+    });
+}
+const StudentQuizRequest = (call, callback) => {
+    const studentId = call.request.student_id;
+    const quizId = call.request.quiz_id;
+
+//       string student_id = 1;
+//   string student_name = 2;
+//   repeated string student_quiz_info = 3;
+//   string message = 5;
+    
+    //find the quiz in the list
+    const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
+}
+
+const StudentQuizSubmission = (call, callback) => {
+
+}
+
+
+
+
+
 const server = new grpc.Server();
 
 server.addService(educationProto.EducationService.service, {
-  SendAttenceConfirmation: SendAttenceConfirmation,
-  ProfessorAttendenceTracker: ProfessorAttendenceTracker,
-  ProfessorQuizTracker: ProfessorQuizTracker
+    ProfessorAttendenceTracker: ProfessorAttendenceTracker,
+    ProfessorQuizTracker: ProfessorQuizTracker,
+    StudentQuizRequest: StudentQuizRequest,
+    StudentAttendenceCheckIn: StudentAttendenceCheckIn,
+    StudentQuizSubmission: StudentQuizSubmission,
+    StudentTelemetry: StudentTelemetry
 });
 
 // Start server

@@ -1,9 +1,9 @@
 const studentsList = [
-  { id: 1, studentName: 'Pedro', checkInStatus: false },
-  { id: 2, studentName: 'Maria', checkInStatus: false },
-  { id: 3, studentName: 'João', checkInStatus: false },
-  { id: 4, studentName: 'Ana', checkInStatus: false },
-  { id: 5, studentName: 'Carlos', checkInStatus: false },
+  { id: 1, studentName: 'Pedro', checkInStatus: false, location: '' },
+  { id: 2, studentName: 'Maria', checkInStatus: false, location: '' },
+  { id: 3, studentName: 'João', checkInStatus: false, location: '' },
+  { id: 4, studentName: 'Ana', checkInStatus: false, location: '' },
+  { id: 5, studentName: 'Carlos', checkInStatus: false, location: '' },
 ];
 
 module.exports = studentsList;
