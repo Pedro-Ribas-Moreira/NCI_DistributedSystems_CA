@@ -5,6 +5,10 @@ const studentsList = require('./assets/students.js');
 const quizList = require('./assets/quiz_questions.js');
 
 
+//need to create two variables that will hold the student subission of quizes, and the student telemetry. while we ddon't have database, we can store this information in memory. these variables will be updated every time a student submits a quiz or sends telemetry data, and the professor will receive real-time updates through the streaming RPCs.
+let studentQuizSubmissions = [];
+let studentTelemetryData = [];
+
 console.log({studentsList})
 console.log({quizList})
 
