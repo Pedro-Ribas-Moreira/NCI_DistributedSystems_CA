@@ -54,10 +54,10 @@
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                 <h2 class="text-lg font-bold mb-4 text-slate-800">Class Quiz</h2>
                 <p class="text-xs text-slate-500 mb-4">Dispatch a quiz to all connected students.</p>
-                <button id="start-quiz-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition shadow mb-3">
+                <button id="start-quiz-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition shadow mb-3 disabled:opacity-50"   onclick="startQuiz()">
                     Start Quiz
                 </button>
-                <button id="monitor-quiz-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition shadow disabled:opacity-50" disabled>
+                <button id="monitor-quiz-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition shadow disabled:opacity-50" disabled onclick="revealMonitorContainer()">
                     Monitor Quiz
                 </button>
             </div>
@@ -114,6 +114,10 @@
             sessionStorage.clear();
             // Redirect to login page
             window.location.href = 'index.html';
+        }
+
+        function revealMonitorContainer() {
+            document.getElementById('monitor-container').classList.remove('hidden');
         }
     </script>
 <!-- 1. Load the Socket.io client library first -->

@@ -68,6 +68,19 @@ io.on('connection', (socket) => {
 
     });
 
+
+    socket.on('activate_quiz', (data) => {
+        console.log(`Professor - [BRIDGE] Received quiz activation request for quiz ${data.quiz_id} from professor ${data.professor_id}`);
+        
+        grpcClient.ProfessorQuizActivation(data, (error, response) => {
+            if (error) {
+                console.error(`Professor - [BRIDGE] Quiz activation error for professor ${data.professor_id}:`, error.message);
+                return socket.emit('quiz_activation_error', { message: error.message });
+            }
+            console.log(`Professor - [BRIDGE] Quiz activation successful for professor ${data.professor_id}:`, response);
+            socket.emit('quiz_activation_success', response);
+        });
+    });
 // student check-in listener
 
         socket.on('student_checkin', (data) => {
@@ -98,6 +111,22 @@ io.on('connection', (socket) => {
                 socket.emit('telemetry_response', { success: true, message: 'Telemetry received', server_response: response });
             });
         });
+
+
+        socket.on('request_quiz_questions', (data) => {
+            console.log(`Student - [BRIDGE] Received quiz question request for quiz ${data.quiz_id} from student ${data.student_id}`);
+            
+            grpcClient.StudentQuizRequest(data, (error, response) => {
+                if (error) {
+                    console.error(`Student - [BRIDGE] Quiz question request error for student ${data.student_id}:`, error.message);
+                    return socket.emit('quiz_questions_error', { message: error.message });
+                }
+                console.log(`Student - [BRIDGE] Quiz questions retrieved successfully for student ${data.student_id}:`, response);
+                socket.emit('quiz_questions', response);
+            });
+        });
+
+
 
 
 

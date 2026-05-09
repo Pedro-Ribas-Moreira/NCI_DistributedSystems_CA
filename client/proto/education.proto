@@ -17,6 +17,7 @@ service EducationService {
   rpc ProfessorAttendenceTracker (ProfessorAttendenceTrackerRequest) returns (stream ProfessorAttendenceTrackerResponse); // DONE
 // bidirectional streaming  
   rpc ProfessorQuizTracker (stream ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
+    
 }
 
 // MESSAGES
@@ -40,17 +41,43 @@ message StudentCheckInResponse {
 message StudentQuizResponse {
   int32 quiz_id = 1;
   string quiz_title = 2;
-  repeated string quiz_questions = 3;
+  repeated QuizQuestions quiz_questions = 3;
   string message = 4;
 }
+// quiz question message
+        // {id : 1,
+        // status: "inactive",
+        // title: "History Quiz",
+        // questions: [
+        //     {
+        //         question_id: 1,
+        //         question: "Who was the first President of the United States?",
+        //         options: [{title: "George Washington", id: 1}, {title: "Thomas Jefferson", id: 2}, {title: "Abraham Lincoln", id: 3}, {title: "John Adams", id: 4}],
+        //         correct: {title: "George Washington", id: 1}    
+        //     }]}
+message QuizQuestions {
+  int32 question_id = 1;
+  string question = 2;
+  repeated QuizOptions options = 3; 
+  QuizOptions correct_answer = 4;
 
+}
+message QuizOptions {
+  int32 option_id = 1;
+  string option_title = 2;
+}
 //   rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
 
 message StudentQuizSubmissionRequest {
   string student_id = 1;
   int32 quiz_id = 2;
-  string submitted_answers = 3;
+  repeated QuizAnswers submitted_answers = 3;
 } 
+
+message QuizAnswers {
+  int32 question_id = 1;
+  int32 selected_option_id = 2;
+}
 
 
 message StudentQuizSubmissionResponse {

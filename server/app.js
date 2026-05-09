@@ -80,18 +80,11 @@ const ProfessorQuizTracker = (call) => {
     if (quiz) {
         if(quiz.status === 'active') {
             call.write({
-                student_id: "N/A",
-                student_name: "N/A",
-                quiz_status: 'Active',
                 message: `Quiz ${quiz.title} is already active.`    
             });
         } else {
             quiz.status = 'active';
             call.write({
-
-                student_id: "N/A",
-                student_name: "N/A",
-                quiz_status: 'Active',
                 message: `Quiz ${quiz.title} is now active.`
             });
         }
@@ -114,6 +107,7 @@ const ProfessorQuizTracker = (call) => {
 }
 
 const ProfessorQuizActivation = (call, callback) => {
+    console.log("Professor requested quiz activation:" , call.request.quiz_id);
     const quizId = call.request.quiz_id;
     
     //find the quiz in the list
@@ -170,12 +164,21 @@ const StudentAttendenceCheckIn = (call, callback) =>{
 const StudentTelemetry = (call, callback) => {
     call.on('data', (telemetryData) => {
         console.log('Received telemetry data from student:', telemetryData);
-        // Here you can process the telemetry data as needed, e.g., store it in a database or analyze it.
+        studentTelemetryData.push(telemetryData); 
+        
     });
 
+    call.on('error', (err) => {
+        console.error('Error in StudentTelemetry stream:', err);
+    });
     call.on('end', () => {
         console.log('Student finished sending telemetry data.');
-        callback(null, { message: 'Telemetry data received successfully.' });
+
+        callback(null, { 
+            student_id: "N/A",
+            telemetry_status: "Completed",
+            message: 'Telemetry data received successfully.'
+         });
     });
 }
 const StudentQuizRequest = (call, callback) => {
@@ -183,12 +186,37 @@ const StudentQuizRequest = (call, callback) => {
     const quizId = call.request.quiz_id;
 
     console.log(`Received quiz request from student ${studentId} for quiz ${quizId}.`);
-//       string student_id = 1;
-//   string student_name = 2;
-//   repeated string student_quiz_info = 3;
-//   string message = 5;
-    
-    //find the quiz in the list
+//
+
+// example of response payload for StudentQuizResponse message
+// message StudentQuizResponse {
+//   int32 quiz_id = 1;
+//   string quiz_title = 2;
+//   repeated quizQuestions quiz_questions = 3;
+//   string message = 4;
+// }
+// // quiz question message
+//         // {id : 1,
+//         // status: "inactive",
+//         // title: "History Quiz",
+//         // questions: [
+//         //     {
+//         //         question_id: 1,
+//         //         question: "Who was the first President of the United States?",
+//         //         options: [{title: "George Washington", id: 1}, {title: "Thomas Jefferson", id: 2}, {title: "Abraham Lincoln", id: 3}, {title: "John Adams", id: 4}],
+//         //         correct: {title: "George Washington", id: 1}    
+//         //     }]}
+// message QuizQuestions {
+//   int32 question_id = 1;
+//   string question = 2;
+//   repeated QuizOptions options = 3; 
+//   string correct_answer = 4;
+
+// }
+// message QuizOptions {
+//   int32 option_id = 1;
+//   string option_title = 2;
+// }
     const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
     if (quiz) {
         if(quiz.status === 'active') {
@@ -196,7 +224,7 @@ const StudentQuizRequest = (call, callback) => {
             callback(null, {
                 quiz_id: quiz.id,
                 quiz_title: quiz.title,
-                quiz_questions: studentQuizInfo,
+                quiz_questions: quiz.questions,
                 message: `Quiz ${quiz.title} is active. Here are the questions.`
             });
         } else {
@@ -204,15 +232,16 @@ const StudentQuizRequest = (call, callback) => {
                 quiz_id: quiz.id,
                 quiz_title: quiz.title,
                 quiz_questions: [],
-                message: `Quiz ${quiz.title} is not active yet. Please wait for the professor to activate it.`
+                message: `Quiz ${quiz.title} is not active yet. Please wait for the professor to activate the quiz.`
             });
         }
     } else {
         callback(null, {
-            quiz_id: parseInt(quizId),
+            quiz_id: quizId,
             quiz_title: "N/A",
             quiz_questions: [],
             message: `Quiz with ID ${quizId} not found.`
+
         });
     }
 }
@@ -229,10 +258,15 @@ const StudentQuizRequest = (call, callback) => {
 const StudentQuizSubmission = (call, callback) => {
     // 
     call.on('data', (submission) => {
-        console.log('Received quiz submission from student:', submission);
+        console.log('Received quiz submission from student:', submission.student_id);
         // Here you can process the quiz submission as needed, e.g., store it in a database or analyze it.
+
+        // check if quiz existis
         const quiz = quizList.quiz_list.find(q => q.id === parseInt(submission.quiz_id));
         if (quiz) {
+            // save submission in memory
+            studentQuizSubmissions.push(submission);
+            console.log(submission);
             const studentQuizInfo = quiz.questions.map(q => q.question);
             if(professorQuizStream) {
                 professorQuizStream.write({

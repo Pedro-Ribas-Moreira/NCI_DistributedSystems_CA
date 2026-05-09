@@ -3,12 +3,37 @@ const socket = io();
 
 const rosterDiv = document.getElementById('student-roster');
 const startQuizBtn = document.getElementById('start-quiz-btn');
+const monitorQuizBtn = document.getElementById('monitor-quiz-btn');
 
 const studentCountTotal = document.getElementById('students-online-total');
 
 const updateStudentCount = (count) => {
     studentCountTotal.textContent = count;
 }
+
+function startQuiz() {
+    console.log("activate quiz")
+    // This tells the Gateway to run the 'activate_quiz' gRPC function
+    socket.emit('activate_quiz', { professor_id: 'prof_123', quiz_id: 1 });
+}
+
+// Listen for the success response from the Gateway
+socket.on('quiz_activation_success', (data) => {
+    console.log("Success: Quiz started: " + data.message);
+    monitorQuizBtn.disabled = false; // 
+
+    
+    startQuizBtn.disabled = true; //
+    console.log(startQuizBtn);
+
+});
+
+socket.on('quiz_activation_error', (data) => {
+    console.error("ERROR: Quiz activation failed: " + data.message);
+    startQuizBtn.disabled = false; // Re-enable the "Start Quiz" button
+});
+    
+
 
 console.log(`Professor - Requesting initial roster...`);
 socket.emit('start_roster_stream', { professor_id: 'prof_123' });
@@ -41,6 +66,11 @@ socket.on('roster_update', (data) => {
     }
     updateStudentCount(studentsOnlineCounter);
 });
+
+
+
+
+
 
 // Basic Error Handling
 socket.on('connect_error', () => {
