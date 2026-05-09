@@ -70,7 +70,7 @@ io.on('connection', (socket) => {
 
 // student check-in listener
 
-socket.on('student_checkin', (data) => {
+        socket.on('student_checkin', (data) => {
             console.log(`Student - [BRIDGE] Received check-in from student: ${data.student_id}`);
 
 
@@ -83,6 +83,24 @@ socket.on('student_checkin', (data) => {
                 socket.emit('checkin_success', response);
             });
         });
+
+
+
+        socket.on('send_telemetry_ping', (data) => {
+            console.log(`Student - [BRIDGE] Received telemetry ping from student ${data.student_id}:`, data);
+            
+            grpcClient.StudentTelemetry(data, (error, response) => {
+                if (error) {
+                    console.error(`Student - [BRIDGE] Telemetry error for student ${data.student_id}:`, error.message);
+                    return socket.emit('telemetry_response', { success: false, message: error.message });
+                }
+                console.log(`Student - [BRIDGE] Telemetry received by server for student ${data.student_id}:`, response);
+                socket.emit('telemetry_response', { success: true, message: 'Telemetry received', server_response: response });
+            });
+        });
+
+
+
 
 
 });

@@ -58,7 +58,7 @@ activityEvents.forEach(event => {
 });
 
 // Start the Telemetry stream once
-socket.emit('start_telemetry', { student_id: studentId, activity_type: 'page_load', activity_timestamp: new Date().toISOString() });
+socket.emit('send_telemetry_ping', { student_id: studentId, activity_type: 'page_load', activity_timestamp: new Date().toISOString() });
 
 // Check for activity every minute
 setInterval(() => {
@@ -71,7 +71,7 @@ setInterval(() => {
     
     let telemetryData = {
         student_id: studentId,
-        activity_type: isInactive ? "warning_inactivity" : lastEventName,
+        activity_type: isInactive ? "inactive" : lastEventName,
         activity_timestamp: new Date().toISOString()
     };
 
@@ -80,9 +80,24 @@ setInterval(() => {
     // Send the ping to the Gateway
     socket.emit('send_telemetry_ping', telemetryData);
 
-}, 60 * 1000);
+}, 20 * 1000);
+
+// telemetry response listener
+socket.on('telemetry_response', (data) => {
+    console.log(`Student - [TELEMETRY] Received response from Gateway:`, data);
+
+});
+// telemetry error
+socket.on('telemetry_error', (data) => {
+    console.error(`Student - [TELEMETRY] Error from Gateway:`)
+    console.error(data);
+  
+});
 
 
+
+
+// LIVE CONNECTION LOGGING
 // Basic connection log
 socket.on('connect', () => {
     console.log(studentId + ": Connected to Gateway with ID:", socket.id); 
