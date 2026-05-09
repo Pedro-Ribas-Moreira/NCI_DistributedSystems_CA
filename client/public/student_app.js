@@ -7,63 +7,84 @@ const studentName = sessionStorage.getItem('currentUserName') || 'Student';
 const checkInStatusDiv = document.getElementById('checkin-status');
 const checkInBtn = document.getElementById('checkin-btn');
 
-console.log(`--- STUDENT DASHBOARD LOADED FOR: ${studentName} (ID: ${studentId}) ---`);
+console.log(`Student ID: ${studentId}) --- STUDENT DASHBOARD LOADED FOR: ${studentName}`);
 
 // ========================================================
-// 1. AUTOMATIC CHECK-IN ON LOAD
+// 1. ATTENDANCE CHECK-IN ON LOAD
 // ========================================================
 
-/**
- * We trigger the check-in as soon as the page loads.
- * In a real-world hybrid app, we might also send GPS coordinates 
- * or "Remote" status here.
- */
-function performCheckIn() {
-    console.log("[UI] Sending check-in request to gateway...");
+
+function AttendanceCheckIn() {
+    console.log(studentId + ": Sending check-in request to gateway...");
     
     const checkInData = {
         student_id: studentId,
-        class_id: "DS_2026_NCI", // Hardcoded for this CA
-        location: "Dublin, IE (Remote)" 
+        student_location: "Dublin, IE (Remote)" 
     };
 
     socket.emit('student_checkin', checkInData);
 }
 
-// Trigger on load
-performCheckIn();
-
-// Manual check-in button listener (backup)
-checkInBtn.addEventListener('click', () => {
-    checkInStatusDiv.innerText = "Status: Re-checking in...";
-    performCheckIn();
-});
-
-// ========================================================
-// 2. GATEWAY RESPONSE LISTENERS
-// ========================================================
 
 socket.on('checkin_success', (response) => {
-    console.log("[GATEWAY] Check-in confirmed:", response);
+    console.log(studentId + ": Check-in confirmed:", response);
+    // create a temp alert to show the check-in was successful
+    alert(response.confirmation_response);
     
-    // Update UI
-    checkInStatusDiv.innerText = "Status: Checked In ✅";
-    checkInStatusDiv.classList.replace('bg-slate-50', 'bg-green-100');
-    checkInStatusDiv.classList.replace('text-slate-600', 'text-green-700');
-    
-    // Disable button once checked in
-    checkInBtn.innerText = "Check-In Confirmed";
-    checkInBtn.disabled = true;
-    checkInBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
 });
 
 socket.on('checkin_error', (data) => {
-    console.error("[GATEWAY] Check-in failed:", data.message);
-    checkInStatusDiv.innerText = "Status: Error (" + data.message + ")";
-    checkInStatusDiv.classList.add('bg-red-100', 'text-red-700');
+    console.error(studentId + ": Check-in failed:", data.message);
+    alert("Check-in failed: " + data.message + "\nPlease try again or contact support.");
+
 });
+
+// ========================================================
+// 2. REAL-TIME ACTIVITY TELEMETRY
+// ======================================================== 
+
+let lastActivityTime = Date.now();
+let lastEventName = "page_load"; 
+
+// List of events to listen for
+const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart', 'focus', 'visibilitychange'];
+
+activityEvents.forEach(event => {
+    window.addEventListener(event, () => {
+        lastActivityTime = Date.now();
+        lastEventName = event; // Capture the specific event type
+    });
+});
+
+// Start the Telemetry stream once
+socket.emit('start_telemetry', { student_id: studentId, activity_type: 'page_load', activity_timestamp: new Date().toISOString() });
+
+// Check for activity every minute
+setInterval(() => {
+    const now = Date.now();
+    const inactivityDuration = now - lastActivityTime;
+    
+    // Determine the status based on your 5-minute rule
+    // 300,000 ms = 5 minutes
+    const isInactive = inactivityDuration > (5 * 60 * 1000);
+    
+    let telemetryData = {
+        student_id: studentId,
+        activity_type: isInactive ? "warning_inactivity" : lastEventName,
+        activity_timestamp: new Date().toISOString()
+    };
+
+    console.log(`Student - [TELEMETRY] Sending status: ${telemetryData.activity_type}`);
+    
+    // Send the ping to the Gateway
+    socket.emit('send_telemetry_ping', telemetryData);
+
+}, 60 * 1000);
+
 
 // Basic connection log
 socket.on('connect', () => {
-    console.log("[SOCKET] Connected to Gateway with ID:", socket.id);
+    console.log(studentId + ": Connected to Gateway with ID:", socket.id); 
+    AttendanceCheckIn();
 });

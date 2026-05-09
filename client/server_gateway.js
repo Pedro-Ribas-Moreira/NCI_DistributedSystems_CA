@@ -12,6 +12,7 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
@@ -35,10 +36,10 @@ io.on('connection', (socket) => {
     console.log(`[BRIDGE] Browser connected via WebSocket: ${socket.id}`);
 
     // ========================================================
-    // HANDLING SERVER-SIDE STREAMING (Professor Live Roster)
+    // HANDLING SERVER-SIDE STREAMING ( Live Roster)
     // ========================================================
     socket.on('start_roster_stream', (data) => {
-        console.log(`[BRIDGE] Starting gRPC Roster Stream for ${data.professor_id}`);
+        console.log(`Professor - [BRIDGE] Starting gRPC Roster Stream for ${data.professor_id}`);
         
         // Initiate the gRPC Server-Side Stream
         const call = grpcClient.ProfessorAttendenceTracker({ professor_id: data.professor_id });
@@ -46,6 +47,7 @@ io.on('connection', (socket) => {
         // Listen for data chunks coming from the gRPC server
         call.on('data', (response) => {
             // Instantly forward the data to the browser via WebSocket
+            console.log(`Professor - On ProfessorAttendenceTracker stream data received:`, response);
             socket.emit('roster_update', response);
         });
 
@@ -55,21 +57,39 @@ io.on('connection', (socket) => {
         });
 
         call.on('error', (err) => {
-            console.error('[BRIDGE] gRPC Stream Error:', err.message);
+            console.error(' Professor - [BRIDGE] gRPC Stream Error:', err.message);
         });
         
         // If the professor closes their browser, stop the gRPC stream
         socket.on('disconnect', () => {
-            console.log('[BRIDGE] Professor disconnected, cancelling gRPC stream.');
+            console.log(' Professor - [BRIDGE] Professor disconnected, cancelling gRPC stream.');
             call.cancel();
         });
+
     });
+
+// student check-in listener
+
+socket.on('student_checkin', (data) => {
+            console.log(`Student - [BRIDGE] Received check-in from student: ${data.student_id}`);
+
+
+            grpcClient.StudentAttendenceCheckIn(data, (error, response) => {
+                if (error) {
+                    console.error(`Student - [BRIDGE] Check-in error for student ${data.student_id}:`, error.message);
+                    return socket.emit('checkin_error', { message: error.message });
+                }
+                console.log(`Student - [BRIDGE] Check-in successful for student ${data.student_id}:`, response);
+                socket.emit('checkin_success', response);
+            });
+        });
+
 
 });
 
-// Start the Bridge Server
-const PORT = 3000;
+// Start the Bridge Server  
+const PORT = 3001;
 server.listen(PORT, () => {
-    console.log(`\n✅ Bridge Server running!`);
-    console.log(`🌍 Open your browser and go to: http://localhost:${PORT}`);
+    console.log(`Sever Gateway running!`);
+    console.log(`Open your browser and go to: http://localhost:${PORT}`);
 });

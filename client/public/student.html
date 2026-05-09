@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard | Education Platform</title>
     <script src="https://cdn.tailwindcss.com"></script>
+   
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
@@ -15,8 +17,8 @@
             
             <div class="flex items-center gap-6">
                 <div class="flex items-center gap-2">
-                    <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                    <span id="student-welcome" class="text-sm font-medium">Logged in</span>
+                    <i class="fas fa-user-circle text-2xl text-white"></i>
+                    <span id="student-welcome" class="text-sm font-medium">StudentName</span>
                 </div>
                 <button onclick="logout()" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded text-sm font-medium transition shadow-sm">
                     Log Out
@@ -30,38 +32,15 @@
 
         <!-- LEFT PANEL (Controls & Quiz) -->
         <div class="md:col-span-1 flex flex-col gap-4">
-            
-            <!-- 1. Check-In Box -->
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-bold text-slate-800 mb-2">1. Class Attendance</h2>
-                <p class="text-xs text-slate-500 mb-4">Register your presence for today's lecture.</p>
-                <button id="checkin-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded transition shadow mb-3">
-                    Check In
-                </button>
-                <div id="checkin-status" class="p-2 bg-slate-50 text-xs rounded border border-slate-100 text-slate-600 text-center font-medium">
-                    Status: Pending
-                </div>
-            </div>
-
-            <!-- 2. Telemetry / Engagement Box -->
-            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-bold text-slate-800 mb-2">2. Engagement Tracker</h2>
-                <p class="text-xs text-slate-500 mb-4">Stream telemetry data to your professor.</p>
-                <button id="telemetry-btn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded transition shadow mb-3">
-                    Start Telemetry
-                </button>
-            </div>
-
-            <!-- 3. Active Quiz Section -->
             <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col">
-                <h2 class="text-lg font-bold text-slate-800 mb-2">3. Live Quiz</h2>
-                <span class="inline-block bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded font-bold mb-4 w-max">Awaiting Stream...</span>
-                
-                <div id="quiz-container" class="flex-1 border rounded bg-slate-50 border-slate-100 p-3 text-sm flex flex-col gap-3">
+                <h2 class="text-lg font-bold text-slate-800 mb-2">Quiz Container</h2>
+                <button id="start-quiz-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition shadow mb-3">
+                    Start Quiz
+                </button>
+                <div id="quiz-container" class="flex-1 border rounded bg-slate-50 border-slate-100 p-3 text-sm flex flex-col gap-3 hidden">
                     <p class="text-slate-400 italic text-center mt-2">Waiting for professor to start the quiz.</p>
                 </div>
             </div>
-
         </div>
 
         <!-- RIGHT PANEL (Video Stream) -->
@@ -92,7 +71,7 @@
             if (role !== 'student') {
                 window.location.href = 'index.html';
             } else {
-                document.getElementById('student-welcome').innerText = `Logged in as: ${name} (ID: ${id})`;
+                document.getElementById('student-welcome').innerText = `${name}`;
             }
         });
 

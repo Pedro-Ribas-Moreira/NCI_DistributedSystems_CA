@@ -92,7 +92,7 @@ message ProfessorAttendenceTrackerResponse {
 message StudentAttendanceInfo {
   string id = 1;
   string student_name = 2;
-  string check_in_status = 3;
+  bool check_in_status = 3;
   string location = 4;
 }
 

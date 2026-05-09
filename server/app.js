@@ -30,12 +30,25 @@ const packageDefinition = protoLoader.loadSync(PROTO_PATHS, {
 const educationProto = grpc.loadPackageDefinition(packageDefinition).education;
 
 
+// format the roster
+const formatMessageStudentInfo = (students) => {
+    const formattedRoster = students.map(student => {
+        return {
+            id: student.id,
+            student_name: student.studentName,
+            check_in_status: student.checkInStatus,
+            location: student.location
+        }
+    });
+    console.log("Formatting roster for professor:", formattedRoster);
+    return formattedRoster;
+}
 // Professor connection for monitoringattendance status
 const ProfessorAttendenceTracker =  (call) => {
     professorAttendenceStream = call; // Store the stream for later use 
 
     //   repeated StudentAttendanceInfo student_attendance_info = 1;
-    call.write({student_attendance_info: studentsList, message: "Initial student attendance status."}); // Send initial attendance status to professor
+    call.write({student_attendance_info: formatMessageStudentInfo(studentsList), message: "Initial student attendance status."}); // Send initial attendance status to professor
 
 
     call.on('end', () => {
@@ -127,22 +140,28 @@ const StudentAttendenceCheckIn = (call, callback) =>{
   //find the student in the list
     const student = studentsList.find(s => s.id === parseInt(studentId));
     if (student) {
-        if(student.checkInStatus === 'true') {
-            response = `You have already checked in.`;
+        if(student.checkInStatus === true) {
+            response = `200 - You have already checked in.`;
 
         } else {
-            student.checkInStatus = 'true';
+            student.checkInStatus = true;
             student.location = call.request.student_location; 
-            response = `Cheked in successfully.`;   
+            response = `200 - Checked in successfully.`;   
             if(professorAttendenceStream) {
-                professorAttendenceStream.write({ student_attendance_info: studentsList, message: `Student ${student.studentName} checked in from location ${student.location}.`});
+
+                console.log("Updated student attendance status:", formatMessageStudentInfo(studentsList));
+            
+
+                professorAttendenceStream.write({student_attendance_info: formatMessageStudentInfo(studentsList), message: "Student checked in: " + student.studentName});
+
+
             }
         }
     } else {
-        response = `Student with ID ${studentId} not found.`;
+        response = `404 - Student with ID ${studentId} not found.`;
     }
   console.log("Student Check-in Request:", call.request);
-  callback(null, { confirmationResponse: response });
+  callback(null, { confirmation_response: response });
 
 }
 
