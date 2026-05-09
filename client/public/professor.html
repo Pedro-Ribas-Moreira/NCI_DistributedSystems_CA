@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professor Dashboard | Education Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <nav class="bg-blue-600 text-white p-4 shadow-md">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold tracking-wider">Education Platform <br> <span class="text-blue-200 text-sm font-normal">Professor Portal</span></h1>
+            
+            <div class="flex items-center gap-6">
+                <button onclick="logout()" class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded text-sm font-medium transition shadow-sm">
+                    Log Out
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Grid -->
+    <main class="max-w-7xl mx-auto p-4 mt-4 flex-1 w-full grid grid-cols-1 md:grid-cols-4 gap-6">
+
+        <!-- ========================================== -->
+        <!-- LEFT PANEL (Roster & Controls)             -->
+        <!-- ========================================== -->
+        <div class="md:col-span-1 flex flex-col gap-6">
+            
+            <!-- Available Students Box -->
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex-1 flex flex-col">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-lg font-bold text-slate-800">Class Attendence</h2>
+                    <!-- Number of students online / total -->
+                    <span class="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded font-bold">0 / 10 Online</span>
+                </div>
+                
+                <!-- Attendence List -->
+                <div class="flex-1 border rounded bg-slate-50 border-slate-100 overflow-y-auto min-h-[200px] p-2">
+                    <ul id="student-roster" class="space-y-2 text-sm">
+                        <li class="p-3 text-slate-400 italic text-center mt-4">
+                            Waiting for students to check in...
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Class Actions / Quiz Box -->
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                <h2 class="text-lg font-bold mb-4 text-slate-800">Class Quiz</h2>
+                <p class="text-xs text-slate-500 mb-4">Dispatch a quiz to all connected students.</p>
+                <button id="start-quiz-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition shadow mb-3">
+                    Start Quiz
+                </button>
+                <button id="monitor-quiz-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition shadow disabled:opacity-50" disabled>
+                    Monitor Quiz
+                </button>
+            </div>
+
+            <!-- Floating Modal Div that will appear when monitoring a quiz is clicked -->
+             <div id="monitor-container" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+                <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+                    <h3 class="text-xl font-bold mb-4">Quiz Monitoring</h3>
+                    <p class="text-sm text-slate-600 mb-4">Real-time quiz responses will be displayed here.</p>
+                    <div id="quiz-responses" class="space-y-2 max-h-64 overflow-y-auto border rounded p-2 bg-slate-50 border-slate-100">
+                        <!-- Quiz responses will be injected here -->
+                        <p class="text-sm text-slate-400 italic text-center">Waiting for quiz responses...</p>
+                    </div>
+                    <button onclick="document.getElementById('monitor-container').classList.add('hidden')" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition shadow">
+                        Close
+                    </button>
+                </div>
+
+             </div>
+                          
+
+        </div>
+
+        <!-- ========================================== -->
+        <!-- RIGHT PANEL (Video Stream Container)       -->
+        <!-- ========================================== -->
+        <div class="md:col-span-3 bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-lg font-bold text-slate-800">Live Class Stream</h2>
+                <span class="text-xs font-bold text-red-500 flex items-center gap-1">
+                    <span class="w-2 h-2 rounded-full bg-red-500"></span> LIVE
+                </span>
+            </div>
+            
+          
+              
+            <div class="bg-slate-900 rounded-lg flex-1 flex items-center justify-center min-h-[400px] md:min-h-[500px] relative overflow-hidden shadow-inner">
+                            <div class="flex-1 border rounded bg-slate-50 border-slate-100 flex items-center justify-center ">
+                <iframe width="100%" height="400" src="https://www.youtube.com/embed/hVrwuMnCtok" title="Live Class Stream" frameborder="0" allowfullscreen class="rounded"></iframe>   
+            </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Basic client-side javascript to handle the UI Experience
+        // Using localStorage to check if the user is actually a professor
+        document.addEventListener('DOMContentLoaded', () => {
+            const role = sessionStorage.getItem('currentUserRole');
+            
+            // If they aren't logged in or aren't a professor, kick them back to login
+            if (role !== 'professor') {
+                window.location.href = 'index.html';
+            }
+        });
+
+        // Logout function
+        function logout() {
+            // Clear the session storage
+            sessionStorage.clear();
+            // Redirect to login page
+            window.location.href = 'index.html';
+        }
+    </script>
+<!-- 1. Load the Socket.io client library first -->
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <!-- 2. Then load your custom frontend script -->
+    <script src="professor_app.js"></script>
+</body>
+</html>
+</body>
+</html>

@@ -84,11 +84,17 @@ message ProfessorAttendenceTrackerRequest {
 message ProfessorAttendenceTrackerResponse {
   // gets an array of students with their attendance status, location, and name
   // every time a new student checks in, the server will send an updated list to the professor
-  repeated string student_attendance_info = 1;
+  repeated StudentAttendanceInfo student_attendance_info = 1;
   string message = 2;
   
 }
 
+message StudentAttendanceInfo {
+  string id = 1;
+  string student_name = 2;
+  string check_in_status = 3;
+  string location = 4;
+}
 
 // bidirectional streaming rpc ProfessorQuizTracker (stream ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
 
