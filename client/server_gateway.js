@@ -47,12 +47,15 @@ io.on('connection', (socket) => {
     const sid = socket.id;
     console.log(`[BRIDGE] Connected: ${sid}`);
 
-    // 1. PROFESSOR: Quiz Monitoring (Bidirectional)
+    // 1. PROFESSOR / STUDENT: Quiz Monitoring (Bidirectional)
     socket.on('start_quiz_monitor_stream', (data) => {
         if (!activeStreams.monitor[sid]) {
             const stream = grpcClient.ProfessorQuizTracker();
 
-            stream.on('data', (response) => socket.emit('quiz_monitor_update', response));
+            stream.on('data', (response) => {
+                console.log('BRIDGE ', response)
+                    socket.emit('quiz_monitor_update', response)
+                });
             stream.on('error', (err) => socket.emit('quiz_monitor_error', { message: err.message }));
             stream.on('end', () => socket.emit('quiz_monitor_end'));
 
@@ -63,7 +66,8 @@ io.on('connection', (socket) => {
             professor_id: data.professor_id,
             student_id: data.student_id,
             quiz_id: data.quiz_id,
-            message: data.message
+            message: data.message,
+            type: data.type
         });
     });
 
@@ -146,7 +150,49 @@ io.on('connection', (socket) => {
 });
 
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3003;
 server.listen(PORT, () => {
     console.log(`Server Gateway running on http://localhost:${PORT}`);
+});
+
+
+
+const gracefulShutdown = () => {
+    console.log('\n[GATEWAY] Shutdown signal received. Closing bridge gracefully...');
+
+    // 1. Stop accepting new Socket.io connections
+    io.close(() => {
+        console.log('[GATEWAY] Socket.io server closed.');
+    });
+
+    // 2. Stop the HTTP server
+    server.close(() => {
+        console.log('[GATEWAY] HTTP server closed.');
+
+        // 3. Properly close the gRPC Client connection
+        // This clears up internal HTTP/2 channels
+        grpcClient.close();
+        console.log('[GATEWAY] gRPC Client connection closed.');
+
+        process.exit(0);
+    });
+
+    // Forced exit if it takes too long (e.g., hanging streams)
+    setTimeout(() => {
+        console.error('[GATEWAY] Forced shutdown due to timeout.');
+        process.exit(1);
+    }, 5000);
+};
+
+// Listen for Ctrl+C (SIGINT) and Termination (SIGTERM)
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('[FATAL] Uncaught Exception thrown:', err);
+    // Optional: process.exit(1) if you want it to restart, 
+    // but usually, for a Gateway, we just want to log it.
 });

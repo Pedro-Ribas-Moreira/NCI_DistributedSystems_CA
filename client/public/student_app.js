@@ -1,23 +1,46 @@
 const socket = io();
 
-// 2. Get Student Info from Session Storage
+// ==========================================
+// 1. SETUP & STATE
+// ==========================================
 const studentId = sessionStorage.getItem('currentUserId');
 const studentName = sessionStorage.getItem('currentUserName') || 'Student';
 
 // DOM Elements
 const startQuizBtn = document.getElementById('start-quiz-btn');
 const quizContainer = document.getElementById('quiz-container');
-const quizDetailsModal = document.getElementById('quiz-details-modal')
-const quizAnswersContainer = document.getElementById('quiz-answers-container')
+const quizDetailsModal = document.getElementById('quiz-details-modal');
+const quizAnswersContainer = document.getElementById('quiz-answers-container');
 
+// State Variables
 let activeQuiz;
+const quizCorrectAnswers = [];
+const studentQuizAnswers = [];
+
+// Telemetry State
+let lastActivityTime = Date.now();
+let lastEventName = "page_load"; 
+let telemetryInterval = null;
+const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart', 'focus', 'visibilitychange'];
 
 console.log(`Student ID: ${studentId} --- DASHBOARD LOADED`);
 
-// ========================================================
-// 1. ATTENDANCE CHECK-IN ON LOAD
-// ========================================================
+// ==========================================
+// 2. SOCKET LIFECYCLE
+// ==========================================
+socket.on('connect', () => {
+    console.log(`${studentId}: Connected to Gateway`); 
+    AttendanceCheckIn();
+    startTelemetrySession();
+});
 
+window.addEventListener('beforeunload', () => {
+    stopTelemetrySession();
+});
+
+// ==========================================
+// 3. ATTENDANCE MODULE
+// ==========================================
 function AttendanceCheckIn() {
     console.log(`${studentId}: Sending check-in request...`);
     const checkInData = {
@@ -35,18 +58,9 @@ socket.on('checkin_error', (data) => {
     console.error(`${studentId}: Check-in failed:`, data.message);
 });
 
-// ========================================================
-// 2. REAL-TIME ACTIVITY TELEMETRY
-// ======================================================== 
-
-
-
-let lastActivityTime = Date.now();
-let lastEventName = "page_load"; 
-let telemetryInterval = null;
-
-const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart', 'focus', 'visibilitychange'];
-
+// ==========================================
+// 4. TELEMETRY MODULE (Activity Tracking)
+// ==========================================
 activityEvents.forEach(event => {
     window.addEventListener(event, () => {
         lastActivityTime = Date.now();
@@ -54,7 +68,6 @@ activityEvents.forEach(event => {
     });
 });
 
-// Function to start the session properly
 function startTelemetrySession() {
     console.log("[TELEMETRY] Starting new engagement session...");
     socket.emit('start_telemetry_session', { student_id: studentId });
@@ -66,9 +79,8 @@ function startTelemetrySession() {
         activity_timestamp: new Date().toISOString() 
     });
 
-    // Check for activity every 20 seconds
+    // Activity interval
     telemetryInterval = setInterval(() => {
-        // Only send if the socket is actually connected to avoid "thousands of messages" error
         if (!socket.connected) return;
 
         const now = Date.now();
@@ -86,27 +98,22 @@ function startTelemetrySession() {
     }, 20 * 1000);
 }
 
-// Function to end the session and get the summary
 function stopTelemetrySession() {
     console.log("Student - [TELEMETRY] Closing session to request summary...");
     if (telemetryInterval) clearInterval(telemetryInterval);
     socket.emit('stop_telemetry_session');
 }
 
-// Listen for the final summary from the server
 socket.on('telemetry_summary', (data) => {
     console.log(`\n--- LECTURE SUMMARY ---`);
     console.log(data.message);
-    // You could show this in a small toast notification or UI element
 });
 
-// ========================================================
-// 3. QUIZ SYSTEM
-// ========================================================
+// ==========================================
+// 5. QUIZ MODULE
+// ==========================================
 
-
-const quizCorrectAnswers = [];
-const studentQuizAnswers = [];
+// Request Quiz
 if (startQuizBtn) {
     startQuizBtn.addEventListener('click', () => {
         console.log("Student - Requesting quiz questions...");
@@ -114,13 +121,64 @@ if (startQuizBtn) {
         startQuizBtn.disabled = true;
         startQuizBtn.style.display = 'none';
         socket.emit('request_quiz_questions', { quiz_id: 1, student_id: studentId });
+
+         socket.emit('start_quiz_monitor_stream', { professor_id: 'STUDENT', quiz_id: 1, message: `${studentId} subscribing for feedback` });
     });
 }
 
+
+socket.on('quiz_monitor_update', (data) => {
+    console.log("Student - Live update received:", data);
+    if(data.type === 'Feedback'){
+        showProfessorFeedbackMessage(data.message)
+    }
+});
+
+
+
+function showProfessorFeedbackMessage(text) {
+    // 1. Create the notification element
+    const feedbackMessage = document.createElement('div');
+    
+    // Applying Tailwind-like classes for a sleek look
+    feedbackMessage.className = 'fixed top-4 left-1/2 -translate-x-1/2 z-100 w-[90%] max-w-md bg-blue-600 text-white p-4 rounded-xl shadow-2xl flex justify-between items-center animate-slide-down';
+    
+    feedbackMessage.innerHTML = `
+        <div class="flex items-center gap-3">
+            <div class="bg-blue-500 p-2 rounded-lg">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+            </div>
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wider opacity-80">Professor Feedback</p>
+                <p class="font-medium">${text}</p>
+            </div>
+        </div>
+        <button class="ml-4 hover:bg-blue-700 p-1 rounded-full transition-colors" id="close-feedbackMessage">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    `;
+
+    document.body.appendChild(feedbackMessage);
+
+    const closeBtn = feedbackMessage.querySelector('#close-feedbackMessage');
+    const removefeedbackMessage = () => {
+        feedbackMessage.classList.replace('animate-slide-down', 'animate-fade-out');
+        setTimeout(() => feedbackMessage.remove(), 300);
+    };
+
+    closeBtn.onclick = removefeedbackMessage;
+
+    // 4. Auto-remove after 8 seconds if the student doesn't close it
+    setTimeout(removefeedbackMessage, 8000);
+}
+
+
+
+
+// Receive Questions and Render
 socket.on('quiz_questions', (data) => {
     console.log("Received quiz questions:", data);
 
-    // store the correct answers to display at end of the quiz
     data.quiz_questions.forEach(q => {
         quizCorrectAnswers.push({
             question_id: q.question_id,
@@ -129,14 +187,12 @@ socket.on('quiz_questions', (data) => {
             correct_option_title: q.correct ? q.correct.option_title : null
         });
     }); 
-        console.log(quizCorrectAnswers)
+
     quizContainer.innerHTML = `<h2 class="text-xl font-bold mb-4 text-blue-600">${data.quiz_title}</h2>`;
-    
     const totalQuestions = data.quiz_questions.length;
 
     data.quiz_questions.forEach((q, index) => {
         const questionDiv = document.createElement('div');
-        // Hide all questions except the first one
         questionDiv.className = `quiz-question-block ${index === 0 ? '' : 'hidden'} mb-6 p-4 border rounded-xl bg-white shadow-sm`;
         
         questionDiv.innerHTML = `
@@ -156,26 +212,20 @@ socket.on('quiz_questions', (data) => {
 
         optionButtons.forEach(btn => {
             btn.addEventListener('click', (e) => {
-                // Style cleanup
                 optionButtons.forEach(b => {
                     b.classList.remove('bg-blue-50', 'border-blue-500', 'ring-2', 'ring-blue-200');
-                    b.querySelector('div').classList.replace('bg-blue-500', 'bg-transparent');
-                    b.querySelector('div').classList.add('border-slate-200');
+                    b.querySelector('div').className = 'w-4 h-4 rounded-full border-2 border-slate-200 transition-colors';
                 });
                 
-                // Select current
                 const currentBtn = e.currentTarget;
                 currentBtn.classList.add('bg-blue-50', 'border-blue-500', 'ring-2', 'ring-blue-200');
-                currentBtn.querySelector('div').classList.replace('bg-transparent', 'bg-blue-500');
-                currentBtn.querySelector('div').classList.remove('border-slate-200');
-                currentBtn.querySelector('div').classList.add('border-blue-500');
-                currentBtn.querySelector('div').classList.add('bg-blue-500');
+                currentBtn.querySelector('div').className = 'w-4 h-4 rounded-full border-2 border-blue-500 bg-blue-500 transition-colors';
                 
                 selectedOptionId = currentBtn.getAttribute('data-option');
             });
         });
 
-        // Add the Action Button (Next or Submit)
+        // Next/Submit Logic
         const actionBtn = document.createElement('button');
         const isLast = index === totalQuestions - 1;
         actionBtn.textContent = isLast ? "Submit Final Answer" : "Confirm & Next Question";
@@ -187,12 +237,11 @@ socket.on('quiz_questions', (data) => {
                 return;
             }
 
-          //  save answer to display results
             studentQuizAnswers.push({
                 question_id: q.question_id,
                 selected_option_id: parseInt(selectedOptionId)
             });
-            // Emit the answer
+
             socket.emit('submit_quiz_answers', { 
                 student_id: studentId, 
                 quiz_id: data.quiz_id, 
@@ -202,13 +251,13 @@ socket.on('quiz_questions', (data) => {
                 } 
             });
 
-            // Transition to next or show completion
             questionDiv.classList.add('hidden');
             const nextDiv = questionDiv.nextElementSibling;
             
             if (nextDiv && nextDiv.classList.contains('quiz-question-block')) {
                 nextDiv.classList.remove('hidden');
             } else {
+                // Quiz End View
                 quizContainer.innerHTML = `
                     <div class="text-center py-10 bg-white rounded-xl border border-slate-200 shadow-sm">
                         <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -218,51 +267,27 @@ socket.on('quiz_questions', (data) => {
                     </div>
                 `;
 
-                // create new element div
-                // const quizCorrectAnswers = [];
-// const studentQuizAnswers = [];
-
+                // Render Results in Modal
                 quizCorrectAnswers.forEach(ans => {
-
-                  console.log(ans)
                     const correctOptDiv = document.createElement('div');
-                    correctOptDiv.className = 'p-4 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center mt-4';
                     const studentAnswer = studentQuizAnswers.find(a => a.question_id === ans.question_id);
                     const isCorrect = studentAnswer && studentAnswer.selected_option_id === ans.correct_option_id;
                     
                     correctOptDiv.innerHTML = `
-                      <div class="text-center py-10 bg-white rounded-xl border border-slate-200 shadow-sm">
-                      
-                      
-                      
-                      ${
-                        //if correct render green mark, otherwise red 
-                        isCorrect ? 
-                            '<div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>' 
-                            : 
+                      <div class="text-center py-10 bg-white rounded-xl border border-slate-200 shadow-sm mt-4">
+                        ${isCorrect ? 
+                            '<div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>' : 
                             '<div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></div>'
-
-                      }
-                    
-                     
+                        }
                         <p class="mb-4 font-bold text-slate-800 text-lg">${ans.question_id}. ${ans.question_title}</p>
                         <div class="options-list space-y-2">
-                        <span class="text-slate-700">Your Answer:</span> 
-                        ${studentAnswer ? `Option ${studentAnswer.selected_option_id}` : 'No answer'} 
-                        <div>
-                        Correct: Option ${ans.correct_option_id}
+                            <span class="text-slate-700">Your Answer: ${studentAnswer ? `Option ${studentAnswer.selected_option_id}` : 'No answer'}</span> 
+                            <div>Correct: Option ${ans.correct_option_id}</div>
                         </div>
-                        </div>
-                         
-                    </div>                    
-
-                    `;
-
+                      </div>`;
                     quizAnswersContainer.appendChild(correctOptDiv); 
-                })
-                
-                quizDetailsModal.classList.remove('hidden')
-
+                });
+                quizDetailsModal.classList.remove('hidden');
             }
         });
 
@@ -271,6 +296,7 @@ socket.on('quiz_questions', (data) => {
     });
 });
 
+// Submission Listeners
 socket.on('submit_quiz_answers_response', (data) => {
     console.log(`Student - Server Response:`, data);
 });
@@ -280,13 +306,6 @@ socket.on('submit_quiz_answers_error', (data) => {
     alert("Submission Error: " + data.message);
 });
 
-// INITIAL CONNECTION
-socket.on('connect', () => {
-    console.log(`${studentId}: Connected to Gateway`); 
-    AttendanceCheckIn();
-    startTelemetrySession()
-});
-
-window.addEventListener('beforeunload', () => {
-    stopTelemetrySession();
+socket.on('connect_error', () => {
+    console.error("Gateway connection lost.");
 });

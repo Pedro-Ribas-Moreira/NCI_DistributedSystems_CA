@@ -105,7 +105,13 @@ if (monitorQuizBtn) {
     monitorQuizBtn.addEventListener('click', () => {
         if (monitorContainer) monitorContainer.classList.remove('hidden');
         console.log(`Professor - Initiating quiz monitoring stream...`);
-        socket.emit('start_quiz_monitor_stream', { professor_id: 'prof_123', quiz_id: 1 });
+        socket.emit('start_quiz_monitor_stream', { 
+            professor_id: 'prof_123',
+            student_id: '',
+            quiz_id: 1,
+            message: '',
+            type: 'InitialRequest'
+        });
     });
 }
 
@@ -187,7 +193,13 @@ const sendLiveFeedback = () => {
     listFeedbackMessages.push({msg: msg, timestamp: timestamp});
     feedbackContainer.innerHTML = '';
 
-    socket.emit('start_quiz_monitor_stream', { professor_id: 'prof_123', quiz_id: 1, message: msg });
+    socket.emit('start_quiz_monitor_stream', { 
+         professor_id: 'prof_123',
+         student_id: '',
+         quiz_id: 1,
+         message: msg,
+         type: 'Feedback'
+     });
 
     listFeedbackMessages.forEach((item) => {
         const msgLi = document.createElement('li');

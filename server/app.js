@@ -16,6 +16,7 @@ console.log({quizList})
 // create professorStream variable to hold the professor's stream for monitoring quiz and attendance status.
 let professorAttendenceStream = null;
 let professorQuizStream = null;
+let monitorStreams = []
 // Path to proto file
 const PROTO_PATHS = [
     path.join(__dirname, './proto/education.proto'),
@@ -69,43 +70,70 @@ const ProfessorAttendenceTracker =  (call) => {
 
 const ProfessorQuizTracker = (call) => { 
     console.log(`[SERVER] Professor connected to Quiz Monitor.`);
-    
-    if(!professorQuizStream){
-        professorQuizStream = call; 
-    }
+     monitorStreams.push(call);
      call.on('data', (data)=>{
+
         console.log('Server - Quiz Tracker')
-        console.log(data)
-        
-            const quizId = call.quiz_id;
+        console.log(data)    
+            const quizId = data.quiz_id;
         
             // 1. Check if the quiz exists and activate it if needed
-            const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
-            if (quiz) {
-                if (quiz.status !== 'active') {
-                    quiz.status = 'active';
-                    console.log(`[SERVER] Quiz "${quiz.title}" is now active.`);
-                }
+            if(data.type === 'InitialRequest'){
+                const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
+                if (quiz) {
+                    if (quiz.status !== 'active') {
+                        quiz.status = 'active';
+                        console.log(`[SERVER] Quiz "${quiz.title}" is now active.`);
+                        // Push an initial confirmation message to the professor
+                        monitorStreams.forEach(stream => {
+                            stream.write({
+                                        student_id: '',
+                                        quiz_id: quizId, 
+                                        submitted_answers: [],
+                                        message: `Monitoring started for: ${quiz.title}`,
+                                        type: 'StartMonitor'   
+                                    })
+                                    });
+                       
+                    }else{
+                       monitorStreams.forEach(stream => {
+                            stream.write({
+                            student_id: '',
+                            quiz_id: quizId, 
+                            submitted_answers: [],
+                            message: `Quiz is already active: ${quiz.title}`,
+                            type: 'StartMonitor'                 
+                        })});
+                    }
                 
-                // Push an initial confirmation message to the professor
-                call.write({
-                    quiz_id: quizId,
-                    message: `Monitoring started for: ${quiz.title}. Status: ${quiz.status}`
-                });
-            }   
+                }   
+            }else{
+                if(data.type == 'Feedback'){
+                    monitorStreams.forEach(stream => {
+                            stream.write({
+                            student_id: '',
+                            quiz_id: 1,
+                            submitted_answers: [],
+                            message: data.message,
+                            type: data.type
+                        });
+                    });
+                }
+            }
         
     })
 
     // 2. Clean up when professor disconnects
     call.on('end', () => {
         console.log('[SERVER] Professor disconnected from quiz tracker.');
-        professorQuizStream = null;
+        monitorStreams = monitorStreams.filter(s => s !== call);
         call.end();
+  
     });
 
     call.on('error', (err) => {
         console.error('[SERVER] ProfessorQuizTracker Error:', err.message);
-        professorQuizStream = null;
+        monitorStreams = monitorStreams.filter(s => s !== call);
     });
 };
 
@@ -294,15 +322,17 @@ const StudentQuizSubmission = (call) => {
             // ========================================================
             // 4. PUSH TO PROFESSOR (Real-Time Engagement)
             // ========================================================
-            if (professorQuizStream) {
+            if (monitorStreams.length > 0) {
                 console.log(`[PUSH] Updating Professor on progress for Student ${studentId}`);
-                
-                professorQuizStream.write({
+                monitorStreams.forEach(stream => {
+                stream.write({
                     student_id: studentId,
                     quiz_id: quizId,
                     submitted_answers: record.submitted_answers, // Sending the full array of their answers
-                    message: `Student ${studentId} just answered Question ${submittedAnswer.question_id}`
+                    message: `Student ${studentId} just answered Question ${submittedAnswer.question_id}`,
+                    type: 'AnswerSubmission'
                 });
+            })
             }
             console.log("Current Student Quiz Submissions State:", studentQuizSubmissions);
         } catch (err) {
@@ -340,3 +370,44 @@ server.bindAsync(
     console.log('Server Streaming gRPC server running on port 50053');
   }
 );
+
+
+const gracefulShutdown = () => {
+    console.log('\n[SERVER] Shutdown signal received. Cleaning up gRPC service...');
+
+    // 1. Notify and close all active monitoring streams
+    if (monitorStreams.length > 0) {
+        console.log(`[SERVER] Closing ${monitorStreams.length} active monitor streams.`);
+        monitorStreams.forEach(stream => {
+            try {
+                stream.write({ message: "Server is shutting down...", type: "Shutdown" });
+                stream.end();
+            } catch (e) {
+                // Ignore streams that are already dead
+            }
+        });
+        monitorStreams = [];
+    }
+
+    // 2. Try to shut down the server safely
+    // tryShutdown waits for existing unary calls to finish
+    server.tryShutdown((err) => {
+        if (err) {
+            console.error('[SERVER] Shutdown error:', err);
+            server.forceShutdown(); // Kill immediately if tryShutdown fails
+            return process.exit(1);
+        }
+        console.log('[SERVER] gRPC Server stopped successfully.');
+        process.exit(0);
+    });
+
+    // Safety timeout
+    setTimeout(() => {
+        console.error('[SERVER] Could not shut down gracefully in time. Forcing exit.');
+        server.forceShutdown();
+        process.exit(1);
+    }, 5000);
+};
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);

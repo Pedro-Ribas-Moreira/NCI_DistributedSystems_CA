@@ -123,6 +123,7 @@ message ProfessorQuizTrackerRequest {
   string student_id = 2;
   int32 quiz_id = 3;
   string message = 4;
+  string type = 5;
 }
 
 message ProfessorQuizTrackerResponse {
@@ -130,6 +131,7 @@ message ProfessorQuizTrackerResponse {
   int32 quiz_id = 2;
   repeated QuizAnswer submitted_answers = 3;
   string message = 4;
+  string type = 5;
   
 }
 
