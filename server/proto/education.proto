@@ -11,12 +11,13 @@ service EducationService {
   rpc StudentQuizRequest (StudentQuizRequest) returns ( StudentQuizResponse);
   rpc ProfessorQuizActivation (ProfessorQuizActivationRequest) returns (ProfessorQuizActivationResponse);
 // client streaming
-  rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
+
   rpc StudentTelemetry (stream StudentTelemetryRequest) returns (StudentTelemetryResponse);
 // server streaming
   rpc ProfessorAttendenceTracker (ProfessorAttendenceTrackerRequest) returns (stream ProfessorAttendenceTrackerResponse); // DONE
+  rpc ProfessorQuizTracker (ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
 // bidirectional streaming  
-  rpc ProfessorQuizTracker (stream ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
+    rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
     
 }
 
@@ -44,22 +45,12 @@ message StudentQuizResponse {
   repeated QuizQuestions quiz_questions = 3;
   string message = 4;
 }
-// quiz question message
-        // {id : 1,
-        // status: "inactive",
-        // title: "History Quiz",
-        // questions: [
-        //     {
-        //         question_id: 1,
-        //         question: "Who was the first President of the United States?",
-        //         options: [{title: "George Washington", id: 1}, {title: "Thomas Jefferson", id: 2}, {title: "Abraham Lincoln", id: 3}, {title: "John Adams", id: 4}],
-        //         correct: {title: "George Washington", id: 1}    
-        //     }]}
+
 message QuizQuestions {
   int32 question_id = 1;
   string question = 2;
   repeated QuizOptions options = 3; 
-  QuizOptions correct_answer = 4;
+  QuizOptions correct = 4;
 
 }
 message QuizOptions {
@@ -71,10 +62,10 @@ message QuizOptions {
 message StudentQuizSubmissionRequest {
   string student_id = 1;
   int32 quiz_id = 2;
-  repeated QuizAnswers submitted_answers = 3;
+  QuizAnswer submitted_answers = 3;
 } 
 
-message QuizAnswers {
+message QuizAnswer {
   int32 question_id = 1;
   int32 selected_option_id = 2;
 }
@@ -135,9 +126,10 @@ message ProfessorQuizTrackerRequest {
 
 message ProfessorQuizTrackerResponse {
   string student_id = 1;
-  string student_name = 2;
-  repeated string student_quiz_info = 3;
-  string message = 5;
+  int32 quiz_id = 2;
+  repeated QuizAnswer submitted_answers = 3;
+  string message = 4;
+  
 }
 
 message ProfessorQuizActivationRequest {

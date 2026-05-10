@@ -33,7 +33,8 @@ const quiz_list = [{
                 options: [{option_title: "1789", option_id: 1}, {option_title: "1776", option_id: 2}, {option_title: "1812", option_id: 3}, {option_title: "1804", option_id: 4}    ],
                 correct: {option_title: "1789", option_id: 1}
             }
-    ]
+    ],
+    num_of_questions: 5
 }
 ]
 

@@ -31,9 +31,55 @@ const grpcClient = new educationProto.EducationService(
     grpc.credentials.createInsecure()
 );
 
+let activeTelemetryStreams = {};
+const activeQuizStreams = {}; // To track active quiz submission streams per socket
+
 // 3. WebSocket Connection Listener
 io.on('connection', (socket) => {
     console.log(`[BRIDGE] Browser connected via WebSocket: ${socket.id}`);
+
+
+
+        // ========================================================
+    // LOGIC FOR: Professor Quiz Monitoring (Server-Side Stream)
+    // ========================================================
+    socket.on('start_quiz_monitor_stream', (data) => {
+        console.log(`[GATEWAY] Professor ${data.professor_id} requesting monitor for Quiz ${data.quiz_id}`);
+
+        // 1. Initiate the Server-Side gRPC Stream
+        const call = grpcClient.ProfessorQuizTracker({
+            professor_id: data.professor_id,
+            quiz_id: data.quiz_id,
+            student_id: data.student_id || "all" 
+        });
+
+        // 2. Listen for "chunks" of data from the gRPC Server
+        call.on('data', (response) => {
+            console.log(`[GATEWAY] Received gRPC update for Prof ${data.professor_id}:`, response.message);
+            
+            // 3. Forward the update to the browser immediately
+            socket.emit('quiz_monitor_update', response);
+        });
+
+        // 4. Handle stream errors
+        call.on('error', (err) => {
+            console.error('[GATEWAY] gRPC Monitor Error:', err.message);
+            socket.emit('quiz_monitor_error', { message: err.message });
+        });
+
+        // 5. Handle stream closure
+        call.on('end', () => {
+            console.log('[GATEWAY] gRPC Monitor Stream ended by server.');
+            socket.emit('quiz_monitor_end');
+        });
+
+        // 6. If the browser disconnects, cancel the gRPC stream to save server resources
+        socket.on('disconnect', () => {
+            console.log(`[GATEWAY] Socket ${socket.id} disconnected, cancelling gRPC stream.`);
+            if (call) call.cancel();
+        });
+    });
+
 
     // ========================================================
     // HANDLING SERVER-SIDE STREAMING ( Live Roster)
@@ -99,18 +145,30 @@ io.on('connection', (socket) => {
 
 
 
-        socket.on('send_telemetry_ping', (data) => {
-            console.log(`Student - [BRIDGE] Received telemetry ping from student ${data.student_id}:`, data);
-            
-            grpcClient.StudentTelemetry(data, (error, response) => {
-                if (error) {
-                    console.error(`Student - [BRIDGE] Telemetry error for student ${data.student_id}:`, error.message);
-                    return socket.emit('telemetry_response', { success: false, message: error.message });
-                }
-                console.log(`Student - [BRIDGE] Telemetry received by server for student ${data.student_id}:`, response);
-                socket.emit('telemetry_response', { success: true, message: 'Telemetry received', server_response: response });
-            });
-        });
+socket.on('start_telemetry_session', (data) => {
+    // Open the gRPC stream ONCE
+    const grpcStream = grpcClient.StudentTelemetry((err, response) => {
+        if (err) return socket.emit('telemetry_error', err);
+        // Send the final summary back to the browser
+        socket.emit('telemetry_summary', response);
+    });
+    activeTelemetryStreams[socket.id] = grpcStream;
+});
+
+socket.on('send_telemetry_ping', (data) => {
+    const stream = activeTelemetryStreams[socket.id];
+    if (stream) {
+        stream.write(data); // Just write to the existing stream
+    }
+});
+
+socket.on('stop_telemetry_session', () => {
+    const stream = activeTelemetryStreams[socket.id];
+    if (stream) {
+        stream.end(); // Trigger the summary on the server
+        delete activeTelemetryStreams[socket.id];
+    }
+});
 
 
         socket.on('request_quiz_questions', (data) => {
@@ -128,11 +186,36 @@ io.on('connection', (socket) => {
 
 
 
+socket.on('submit_quiz_answers', (data) => {
+    console.log(`Student - [BRIDGE] Submitting answer for Q:${data.submitted_answers.question_id}`);
+    
+    // 1. Create the stream if it doesn't exist for this socket
+    if (!activeQuizStreams[socket.id]) {
+        const call = grpcClient.StudentQuizSubmission();
 
+        // Listen for data coming BACK from the Server stream
+        call.on('data', (response) => {
+            console.log("[BRIDGE] Server pushed submission update:", response);
+            socket.emit('submit_quiz_answers_response', response);
+        });
+
+        call.on('error', (err) => {
+            console.error("[BRIDGE] Submission Stream Error:", err);
+            delete activeQuizStreams[socket.id];
+        });
+
+        activeQuizStreams[socket.id] = call;
+    }
+
+    // 2. Write the data to the gRPC stream
+    activeQuizStreams[socket.id].write(data);
+});
 
 
 
 });
+
+
 
 // Start the Bridge Server  
 const PORT = 3001;

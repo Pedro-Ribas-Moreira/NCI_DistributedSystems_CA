@@ -7,6 +7,7 @@ const quizList = require('./assets/quiz_questions.js');
 
 //need to create two variables that will hold the student subission of quizes, and the student telemetry. while we ddon't have database, we can store this information in memory. these variables will be updated every time a student submits a quiz or sends telemetry data, and the professor will receive real-time updates through the streaming RPCs.
 let studentQuizSubmissions = [];
+
 let studentTelemetryData = [];
 
 console.log({studentsList})
@@ -67,44 +68,39 @@ const ProfessorAttendenceTracker =  (call) => {
 }
 
 const ProfessorQuizTracker = (call) => { 
-    //Professor request quiz to be active, and the server will send real-time updates on quiz status and student submissions.
-    professorQuizStream = call; // Store the stream for later use
-    const professorId = call.request.professor_id;
-
-    console.log(`Professor ${professorId} connected to quiz tracker.`);
+    console.log(`[SERVER] Professor ${call.request.professor_id} connected to Quiz Monitor.`);
+    
+    // Store the stream for later use in StudentQuizSubmission
+    professorQuizStream = call; 
     const quizId = call.request.quiz_id;
 
-    //find the quiz in the list
-    // check if quiz is active, if is not, then activate, otherwise say quiz is already active. then send real-time updates on quiz status and student submissions.
+    // 1. Check if the quiz exists and activate it if needed
     const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
     if (quiz) {
-        if(quiz.status === 'active') {
-            call.write({
-                message: `Quiz ${quiz.title} is already active.`    
-            });
-        } else {
+        if (quiz.status !== 'active') {
             quiz.status = 'active';
-            call.write({
-                message: `Quiz ${quiz.title} is now active.`
-            });
+            console.log(`[SERVER] Quiz "${quiz.title}" is now active.`);
         }
+        
+        // Push an initial confirmation message to the professor
+        call.write({
+            quiz_id: quizId,
+            message: `Monitoring started for: ${quiz.title}. Status: ${quiz.status}`
+        });
     }   
     
+    // 2. Clean up when professor disconnects
     call.on('end', () => {
-        console.log('Professor disconnected from quiz tracker.');
-        professorQuizStream = null; // Clear the stream when professor disconnects
+        console.log('[SERVER] Professor disconnected from quiz tracker.');
+        professorQuizStream = null;
         call.end();
-    }
-    );
-
-    call.on('error', (err) => {
-        console.error('Error in ProfessorQuizTracker stream:', err);
-        professorQuizStream = null; // Clear the stream on error
     });
 
-
-
-}
+    call.on('error', (err) => {
+        console.error('[SERVER] ProfessorQuizTracker Error:', err.message);
+        professorQuizStream = null;
+    });
+};
 
 const ProfessorQuizActivation = (call, callback) => {
     console.log("Professor requested quiz activation:" , call.request.quiz_id);
@@ -162,65 +158,40 @@ const StudentAttendenceCheckIn = (call, callback) =>{
 // client side streamning   rpc StudentTelemetry (stream StudentTelemetryRequest) returns (StudentTelemetryResponse);
 
 const StudentTelemetry = (call, callback) => {
-    call.on('data', (telemetryData) => {
-        console.log('Received telemetry data from student:', telemetryData);
-        studentTelemetryData.push(telemetryData); 
-        
+    let eventCount = 0;
+    let studentId = "Unknown";
+
+    // This fires every time the client sends a "ping"
+    call.on('data', (data) => {
+        eventCount++;
+        studentId = data.student_id;
+        console.log(`[TELEMETRY] Event #${eventCount} from ${studentId}: ${data.activity_type}`);
     });
 
-    call.on('error', (err) => {
-        console.error('Error in StudentTelemetry stream:', err);
-    });
+    // This fires ONLY when the client calls stream.end()
     call.on('end', () => {
-        console.log('Student finished sending telemetry data.');
-
-        callback(null, { 
-            student_id: "N/A",
-            telemetry_status: "Completed",
-            message: 'Telemetry data received successfully.'
-         });
+        console.log(`[TELEMETRY] Session ended for ${studentId}. Total: ${eventCount}`);
+        
+        // This is where you send the SINGLE summary response
+        callback(null, {
+            student_id: studentId,
+            telemetry_status: "Complete",
+            message: `Lecture engagement captured. Total events: ${eventCount}`
+        });
     });
-}
+};
+
+
 const StudentQuizRequest = (call, callback) => {
     const studentId = call.request.student_id;
     const quizId = call.request.quiz_id;
 
     console.log(`Received quiz request from student ${studentId} for quiz ${quizId}.`);
-//
-
-// example of response payload for StudentQuizResponse message
-// message StudentQuizResponse {
-//   int32 quiz_id = 1;
-//   string quiz_title = 2;
-//   repeated quizQuestions quiz_questions = 3;
-//   string message = 4;
-// }
-// // quiz question message
-//         // {id : 1,
-//         // status: "inactive",
-//         // title: "History Quiz",
-//         // questions: [
-//         //     {
-//         //         question_id: 1,
-//         //         question: "Who was the first President of the United States?",
-//         //         options: [{title: "George Washington", id: 1}, {title: "Thomas Jefferson", id: 2}, {title: "Abraham Lincoln", id: 3}, {title: "John Adams", id: 4}],
-//         //         correct: {title: "George Washington", id: 1}    
-//         //     }]}
-// message QuizQuestions {
-//   int32 question_id = 1;
-//   string question = 2;
-//   repeated QuizOptions options = 3; 
-//   string correct_answer = 4;
-
-// }
-// message QuizOptions {
-//   int32 option_id = 1;
-//   string option_title = 2;
-// }
     const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
     if (quiz) {
         if(quiz.status === 'active') {
             const studentQuizInfo = quiz.questions.map(q => q.question);
+            console.log(quiz.questions)
             callback(null, {
                 quiz_id: quiz.id,
                 quiz_title: quiz.title,
@@ -255,37 +226,88 @@ const StudentQuizRequest = (call, callback) => {
 //   string submitted_answers = 3;
 // } 
 
-const StudentQuizSubmission = (call, callback) => {
-    // 
-    call.on('data', (submission) => {
-        console.log('Received quiz submission from student:', submission.student_id);
-        // Here you can process the quiz submission as needed, e.g., store it in a database or analyze it.
+const StudentQuizSubmission = (call) => {
+    console.log("Student started submitting quiz answers via stream.");
 
-        // check if quiz existis
-        const quiz = quizList.quiz_list.find(q => q.id === parseInt(submission.quiz_id));
-        if (quiz) {
-            // save submission in memory
-            studentQuizSubmissions.push(submission);
-            console.log(submission);
-            const studentQuizInfo = quiz.questions.map(q => q.question);
-            if(professorQuizStream) {
-                professorQuizStream.write({
-                    student_id: submission.student_id,
-                    student_name: `Student ${submission.student_id}`,
-                    student_quiz_info: studentQuizInfo,
-                    message: `Student ${submission.student_id} submitted answers for quiz ${quiz.title}.`
+    call.on('data', (submission) => {
+        try {
+            console.log('Received quiz submission from:', submission.student_id);
+
+            const quizId = parseInt(submission.quiz_id);
+            const studentId = submission.student_id; // Keeping as string to match proto student_id
+            const submittedAnswer = submission.submitted_answers; 
+            
+            // 1. Safety Check: Does the quiz even exist?
+            const quiz = quizList.quiz_list.find(q => q.id === quizId);
+            
+            if (!quiz) {
+                console.error(`[ERROR] Quiz ${quizId} not found.`);
+                return call.write({
+                    student_id: studentId,
+                    quiz_id: quizId,
+                    submission_status: "Error",
+                    feedback: "Error: Quiz not found on server."
                 });
             }
-        }   
-    }
-    );
 
-    call.on('end', () => {
-        console.log('Student finished submitting quiz answers.');
-        callback(null, { message: 'Quiz submission received successfully.' });
+            // 2. Logic: Save/Update submission
+            let record = studentQuizSubmissions.find(
+                s => s.student_id === studentId && s.quiz_id === quizId
+            );
+
+            if (record) {
+                // Avoid duplicate entries for the same question if student clicks twice
+                const existingAnsIndex = record.submitted_answers.findIndex(a => a.question_id === submittedAnswer.question_id);
+                if (existingAnsIndex !== -1) {
+                    record.submitted_answers[existingAnsIndex] = submittedAnswer;
+                } else {
+                    record.submitted_answers.push(submittedAnswer);
+                }
+            } else {    
+                record = {
+                    student_id: studentId,
+                    quiz_id: quizId,
+                    submitted_answers: [submittedAnswer],
+                    submission_status: "Partial"
+                };
+                studentQuizSubmissions.push(record);
+            }
+
+            // 3. Response to Student
+            const count = record.submitted_answers.length;
+            const isFinished = count >= quiz.num_of_questions;
+
+            call.write({
+                student_id: studentId,
+                quiz_id: quizId,
+                submission_status: isFinished ? "Completed" : "Partial",
+                feedback: `Answer received. Progress: ${count}/${quiz.num_of_questions}`,
+            });
+
+            // ========================================================
+            // 4. PUSH TO PROFESSOR (Real-Time Engagement)
+            // ========================================================
+            if (professorQuizStream) {
+                console.log(`[PUSH] Updating Professor on progress for Student ${studentId}`);
+                
+                professorQuizStream.write({
+                    student_id: studentId,
+                    quiz_id: quizId,
+                    submitted_answers: record.submitted_answers, // Sending the full array of their answers
+                    message: `Student ${studentId} just answered Question ${submittedAnswer.question_id}`
+                });
+            }
+            console.log("Current Student Quiz Submissions State:", studentQuizSubmissions);
+        } catch (err) {
+            console.error("Critical error in stream handler:", err);
+        }
     });
 
-}
+    call.on('end', () => {
+        console.log("Student finished stream.");
+        call.end();
+    });
+};
 
 
 

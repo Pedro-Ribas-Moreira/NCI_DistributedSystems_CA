@@ -25,7 +25,7 @@
     <main class="max-w-7xl mx-auto p-4 mt-4 flex-1 w-full grid grid-cols-1 md:grid-cols-4 gap-6">
 
         <!-- ========================================== -->
-        <!-- LEFT PANEL (Roster & Controls)             -->
+        <!-- LEFT PANEL              -->
         <!-- ========================================== -->
         <div class="md:col-span-1 flex flex-col gap-6">
             
@@ -36,7 +36,7 @@
                     <!-- Number of students online / total -->
                     <p class="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded font-bold">
                         <span id="students-online-total">0 </span>
-                        / 10 Online    
+                        / 4 Online    
                     </p>
                 </div>
                 
@@ -62,22 +62,7 @@
                 </button>
             </div>
 
-            <!-- Floating Modal Div that will appear when monitoring a quiz is clicked -->
-             <div id="monitor-container" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-                <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-                    <h3 class="text-xl font-bold mb-4">Quiz Monitoring</h3>
-                    <p class="text-sm text-slate-600 mb-4">Real-time quiz responses will be displayed here.</p>
-                    <div id="quiz-responses" class="space-y-2 max-h-64 overflow-y-auto border rounded p-2 bg-slate-50 border-slate-100">
-                        <!-- Quiz responses will be injected here -->
-                        <p class="text-sm text-slate-400 italic text-center">Waiting for quiz responses...</p>
-                    </div>
-                    <button onclick="document.getElementById('monitor-container').classList.add('hidden')" class="mt-4 w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded transition shadow">
-                        Close
-                    </button>
-                </div>
 
-             </div>
-                          
 
         </div>
 
@@ -96,9 +81,45 @@
             </div>
         </div>
     </main>
+   <div id="monitor-container" class="fixed z-10 inset-0 bg-black bg-opacity-60 flex items-center justify-center hidden backdrop-blur-sm">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden m-4">
+            <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <div>
+                    <h3 class="text-2xl font-bold text-slate-800">Live Quiz Monitoring</h3>
+                    <p class="text-sm text-slate-500">Real-time engagement tracking for active students.</p>
+                </div>
+                <button onclick="document.getElementById('monitor-container').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
 
+            <!-- Card Grid -->
+            <div id="quiz-responses" class="p-6 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50">
+                <p class="col-span-full text-center text-slate-400 italic py-10">Waiting for first response...</p>
+            </div>
+
+            <div class="p-4 border-t border-slate-100 flex justify-end bg-white">
+                <button onclick="document.getElementById('monitor-container').classList.add('hidden')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-6 rounded-lg transition">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SUB-MODAL: STUDENT DETAILS -->
+    <div id="details-modal" class="fixed z-20 inset-0 bg-black bg-opacity-40 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-xl shadow-2xl w-full max-w-md border border-slate-200">
+            <div class="flex justify-between items-center mb-4">
+                <h4 id="details-name" class="text-lg font-bold text-blue-600">Student Details</h4>
+                <button onclick="document.getElementById('details-modal').classList.add('hidden')" class="text-slate-400">✕</button>
+            </div>
+            <div id="details-content" class="space-y-3">
+                <!-- Answer list injected here -->
+            </div>
+            <button onclick="document.getElementById('details-modal').classList.add('hidden')" class="mt-6 w-full bg-blue-600 text-white py-2 rounded-lg font-bold">Done</button>
+        </div>
+    </div>
+    
+    <script src="/socket.io/socket.io.js"></script>  
     <script>
-  
         document.addEventListener('DOMContentLoaded', () => {
             const role = sessionStorage.getItem('currentUserRole');
             
@@ -120,10 +141,6 @@
             document.getElementById('monitor-container').classList.remove('hidden');
         }
     </script>
-<!-- 1. Load the Socket.io client library first -->
-    <script src="/socket.io/socket.io.js"></script>
-    
-    <!-- 2. Then load your custom frontend script -->
     <script src="professor_app.js"></script>
 </body>
 </html>

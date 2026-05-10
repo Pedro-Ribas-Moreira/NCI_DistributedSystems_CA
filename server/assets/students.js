@@ -3,7 +3,6 @@ const studentsList = [
   { id: 2, studentName: 'Maria', checkInStatus: false, location: '' },
   { id: 3, studentName: 'João', checkInStatus: false, location: '' },
   { id: 4, studentName: 'Ana', checkInStatus: false, location: '' },
-  { id: 5, studentName: 'Carlos', checkInStatus: false, location: '' },
 ];
 
 module.exports = studentsList;

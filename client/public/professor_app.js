@@ -1,78 +1,200 @@
-// Connect to this gateway
-const socket = io(); 
+const socket = io();
 
 const rosterDiv = document.getElementById('student-roster');
 const startQuizBtn = document.getElementById('start-quiz-btn');
 const monitorQuizBtn = document.getElementById('monitor-quiz-btn');
-
 const studentCountTotal = document.getElementById('students-online-total');
 
-const updateStudentCount = (count) => {
-    studentCountTotal.textContent = count;
-}
+const monitorContainer = document.getElementById('monitor-container');
+const quizResponsesDiv = document.getElementById('quiz-responses');
+const detailsModal = document.getElementById('details-modal');
+const detailsContent = document.getElementById('details-content');
+const detailsName = document.getElementById('details-name');
 
-function startQuiz() {
-    console.log("activate quiz")
-    // This tells the Gateway to run the 'activate_quiz' gRPC function
-    socket.emit('activate_quiz', { professor_id: 'prof_123', quiz_id: 1 });
-}
+// I'm using a map to keep track of student progress
+let studentQuizProgressMap = new Map(); 
+let onlineStudentsMap = new Map(); // Maps student IDs to Names from the roster
+let currentQuiz = {};
+// 1. ATTENDENCE CHECK IN SERVICE
 
-// Listen for the success response from the Gateway
-socket.on('quiz_activation_success', (data) => {
-    console.log("Success: Quiz started: " + data.message);
-    monitorQuizBtn.disabled = false; // 
-
-    
-    startQuizBtn.disabled = true; //
-    console.log(startQuizBtn);
-
-});
-
-socket.on('quiz_activation_error', (data) => {
-    console.error("ERROR: Quiz activation failed: " + data.message);
-    startQuizBtn.disabled = false; // Re-enable the "Start Quiz" button
-});
-    
-
-
-console.log(`Professor - Requesting initial roster...`);
+console.log(`Professor - Requesting class roster stream...`);
 socket.emit('start_roster_stream', { professor_id: 'prof_123' });
 
-// --- LISTEN FOR UPDATES ---
 socket.on('roster_update', (data) => {
-    let studentsOnlineCounter = 0;
-    console.log("Professor - Roster update received:", data);
-    console.log(`Professor - Roster data:`, data);  
-
-    // Clear the "Waiting..." message
+    let onlineCount = 0;
     rosterDiv.innerHTML = '';
-    console.log(`Professor - Student attendance info:`, data.student_attendance_info);
+    
+    // check if we have students in the roster
     if (data.student_attendance_info && data.student_attendance_info.length > 0) {
         data.student_attendance_info.forEach(student => {
-            const li = document.createElement('li');
-            li.className = 'p-3 border-b border-slate-200 flex items-center justify-between bg-white hover:bg-slate-50 transition';
-            
+            // Store the student name locally
+            onlineStudentsMap.set(student.id, student.student_name);
             const isOnline = student.check_in_status === true;
-            const dotColor = isOnline ? 'bg-green-500' : 'bg-slate-300';
-            if(isOnline) studentsOnlineCounter++;
+           
+            if (isOnline) onlineCount++;
+            
+            const li = document.createElement('li');
+           
+            li.className = 'p-3 border-b border-slate-100 flex items-center justify-between bg-white hover:bg-slate-50 transition rounded-lg';
+            
             li.innerHTML = `
                 <span class="text-slate-700 font-medium">${student.student_name}</span>
-                <span class="w-2 h-2 rounded-full ${dotColor}"></span>
+                <span class="w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-slate-300'}"></span>
             `;
             rosterDiv.appendChild(li);
         });
     } else {
         rosterDiv.innerHTML = '<li class="p-4 text-center text-slate-400 italic">No students found.</li>';
     }
-    updateStudentCount(studentsOnlineCounter);
+    
+    // Update the "X / 10 Online"
+    if (studentCountTotal) {
+        studentCountTotal.textContent = onlineCount;
+    }
 });
 
+// ========================================================
+// 2. QUIZ ACTIVATION (Simple RPC)
+// ========================================================
 
+if (startQuizBtn) {
+    startQuizBtn.addEventListener('click', () => {
+        console.log("Professor - Activating quiz...");
+        startQuizBtn.disabled = true;
+        startQuizBtn.innerText = "Activating...";
+        socket.emit('activate_quiz', { professor_id: 'prof_123', quiz_id: 1 });
+    });
+}
 
+socket.on('quiz_activation_success', (data) => {
+    console.log("Professor - Quiz active success:", data.message);
+    if (startQuizBtn) {
+        startQuizBtn.innerText = "Quiz Active!";
+        startQuizBtn.className = "w-full bg-green-600 text-white font-bold py-3 px-4 rounded transition shadow mb-3 opacity-50 cursor-not-allowed";
+    }
+    
+    // Enable monitoring now that the quiz is live
+    if (monitorQuizBtn) {
+        monitorQuizBtn.disabled = false;
+    }
+});
 
+socket.on('quiz_activation_error', (data) => {
+    console.error("Professor - Activation error:", data.message);
+    alert("Could not start quiz: " + data.message);
+    if (startQuizBtn) {
+        startQuizBtn.disabled = false;
+        startQuizBtn.innerText = "Start Quiz";
+    }
+});
 
+// ========================================================
+// 3. QUIZ MONITORING (Streaming Data)
+// ========================================================
 
-// Basic Error Handling
+if (monitorQuizBtn) {
+    monitorQuizBtn.addEventListener('click', () => {
+        // Show the modal
+        if (monitorContainer) {
+            monitorContainer.classList.remove('hidden');
+        }
+        console.log(`Professor - Initiating quiz monitoring stream...`);
+        socket.emit('start_quiz_monitor_stream', { professor_id: 'prof_123', quiz_id: 1 });
+    });
+}
+
+// This listener catches real-time updates whenever a student submits an answer
+socket.on('quiz_monitor_update', (data) => {
+    console.log("Professor - Live update received:", data);
+    
+    if(!data.student_id){
+        console.log("No student ID found in the update, skipping...");
+        return;
+    }
+    console.log(data)
+    const sid = data.student_id;
+    const sName = onlineStudentsMap.get(sid) || `Student ${sid}`;
+    
+    // Update the local state map with the new answer data
+    studentQuizProgressMap.set(sid, {
+        name: sName,
+        answers: data.submitted_answers || [],
+        total: 5// the quiz contains only 5 questions
+    });
+
+    // Re-render the grid cards
+    renderMonitorCards();
+});
+
+function renderMonitorCards() {
+    if (!quizResponsesDiv) return;
+    if (studentQuizProgressMap.size === 0) return;
+
+    // Clear the placeholder
+    quizResponsesDiv.innerHTML = '';
+
+    studentQuizProgressMap.forEach((student, sid) => {
+        const count = student.answers.length;
+        const total = 5;
+        const isFinished = count >= total;
+
+        console.log(count, total, isFinished)
+        const card = document.createElement('div');
+        card.className = `p-4 rounded-xl border bg-white shadow-sm cursor-pointer transition transform hover:scale-[1.02] ${isFinished ? 'border-green-200 bg-green-50' : 'border-slate-200'}`;
+        
+        card.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="font-bold text-slate-800">${student.name}</h3>
+                ${isFinished ? '<span class="text-[9px] bg-green-600 text-white px-2 py-0.5 rounded-full font-bold">DONE</span>' : ''}
+            </div>
+            <div class="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mb-2">
+                <div class="bg-blue-600 h-full transition-all duration-500" style="width: ${(count/total)*100}%"></div>
+            </div>
+            <p class="text-xs font-bold ${isFinished ? 'text-green-600' : 'text-slate-500'}">
+                Progress: ${count} / ${total}
+            </p>
+        `;
+
+        // Click card to open the sub-modal with details
+        card.onclick = () => showStudentDetails(sid);
+        quizResponsesDiv.appendChild(card);
+    });
+}
+
+function showStudentDetails(sid) {
+    const studentData = studentQuizProgressMap.get(sid);
+    if (!studentData) return;
+
+    if (detailsName) detailsName.innerText = `Details: ${studentData.name}`;
+    if (detailsContent) {
+        detailsContent.innerHTML = '';
+
+        if (studentData.answers.length === 0) {
+            detailsContent.innerHTML = '<p class="text-slate-400 italic text-sm py-4 text-center">No answers yet.</p>';
+        } else {
+            studentData.answers.forEach(ans => {
+                const row = document.createElement('div');
+                row.className = 'p-3 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center';
+                row.innerHTML = `
+                    <span class="text-slate-500 text-sm font-medium italic">Question ${ans.question_id}</span>
+                    <span class="text-blue-700 font-bold bg-blue-50 px-3 py-1 rounded">Option ${ans.selected_option_id}</span>
+                `;
+                detailsContent.appendChild(row);
+            });
+        }
+    }
+
+    if (detailsModal) {
+        detailsModal.classList.remove('hidden');
+    }
+}
+
+// Error & End Handlers
+socket.on('quiz_monitor_error', (data) => {
+    console.error("Monitor Error:", data.message);
+    alert("Monitoring error: " + data.message);
+});
+
 socket.on('connect_error', () => {
-    console.error("Professor - Gateway connection failed. Is express_middleware running?");
+    console.error("Gateway connection lost.");
 });

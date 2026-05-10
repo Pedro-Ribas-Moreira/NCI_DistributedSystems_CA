@@ -1,223 +1,292 @@
-// 1. Connect to the Unified Gateway via WebSocket
 const socket = io();
 
-// 2. Get Student Info from Session Storage (set during login)
+// 2. Get Student Info from Session Storage
 const studentId = sessionStorage.getItem('currentUserId');
 const studentName = sessionStorage.getItem('currentUserName') || 'Student';
-const checkInStatusDiv = document.getElementById('checkin-status');
-const checkInBtn = document.getElementById('checkin-btn');
-const startQuizBtn = document.getElementById('start-quiz-btn');
 
-let quizAnswers = []
-console.log(`Student ID: ${studentId}) --- STUDENT DASHBOARD LOADED FOR: ${studentName}`);
+// DOM Elements
+const startQuizBtn = document.getElementById('start-quiz-btn');
+const quizContainer = document.getElementById('quiz-container');
+const quizDetailsModal = document.getElementById('quiz-details-modal')
+const quizAnswersContainer = document.getElementById('quiz-answers-container')
+
+let activeQuiz;
+
+console.log(`Student ID: ${studentId} --- DASHBOARD LOADED`);
 
 // ========================================================
 // 1. ATTENDANCE CHECK-IN ON LOAD
 // ========================================================
 
-
 function AttendanceCheckIn() {
-    console.log(studentId + ": Sending check-in request to gateway...");
-    
+    console.log(`${studentId}: Sending check-in request...`);
     const checkInData = {
         student_id: studentId,
         student_location: "Dublin, IE (Remote)" 
     };
-
     socket.emit('student_checkin', checkInData);
 }
 
-
 socket.on('checkin_success', (response) => {
-    console.log(studentId + ": Check-in confirmed:", response);
-    // create a temp alert to show the check-in was successful
-    alert(response.confirmation_response);
-    
-
+    console.log(`${studentId}: Check-in confirmed:`, response);
 });
 
 socket.on('checkin_error', (data) => {
-    console.error(studentId + ": Check-in failed:", data.message);
-    alert("Check-in failed: " + data.message + "\nPlease try again or contact support.");
-
+    console.error(`${studentId}: Check-in failed:`, data.message);
 });
 
 // ========================================================
 // 2. REAL-TIME ACTIVITY TELEMETRY
 // ======================================================== 
 
+
+
 let lastActivityTime = Date.now();
 let lastEventName = "page_load"; 
+let telemetryInterval = null;
 
-// List of events to listen for
 const activityEvents = ['mousemove', 'keydown', 'scroll', 'click', 'touchstart', 'focus', 'visibilitychange'];
 
 activityEvents.forEach(event => {
     window.addEventListener(event, () => {
         lastActivityTime = Date.now();
-        lastEventName = event; // Capture the specific event type
+        lastEventName = event;
     });
 });
 
-// Start the Telemetry stream once
-socket.emit('send_telemetry_ping', { student_id: studentId, activity_type: 'page_load', activity_timestamp: new Date().toISOString() });
-
-// Check for activity every minute
-setInterval(() => {
-    const now = Date.now();
-    const inactivityDuration = now - lastActivityTime;
+// Function to start the session properly
+function startTelemetrySession() {
+    console.log("[TELEMETRY] Starting new engagement session...");
+    socket.emit('start_telemetry_session', { student_id: studentId });
     
-    // Determine the status based on your 5-minute rule
-    // 300,000 ms = 5 minutes
-    const isInactive = inactivityDuration > (5 * 60 * 1000);
-    
-    let telemetryData = {
-        student_id: studentId,
-        activity_type: isInactive ? "inactive" : lastEventName,
-        activity_timestamp: new Date().toISOString()
-    };
-
-    console.log(`Student - [TELEMETRY] Sending status: ${telemetryData.activity_type}`);
-    
-    // Send the ping to the Gateway
-    socket.emit('send_telemetry_ping', telemetryData);
-
-}, 20 * 1000);
-
-// telemetry response listener
-socket.on('telemetry_response', (data) => {
-    console.log(`Student - [TELEMETRY] Received response from Gateway:`, data);
-
-});
-// telemetry error
-socket.on('telemetry_error', (data) => {
-    console.error(`Student - [TELEMETRY] Error from Gateway:`)
-    console.error(data);
-  
-});
-
-
-// QUIZ ACTIVATION
-
-   startQuizBtn.addEventListener('click', () => {
-      console.log("Student - Quiz requested, sending request to Gateway...");
-      // This will be triggered when the professor starts the quiz
-      // You can add any UI changes here to indicate the quiz has started
-      document.getElementById('quiz-container').classList.remove('hidden');
-      
-      // ask server for quiz questions
-      socket.emit('request_quiz_questions', { quiz_id: 1, student_id: studentId  });
+    // Initial ping
+    socket.emit('send_telemetry_ping', { 
+        student_id: studentId, 
+        activity_type: 'session_start', 
+        activity_timestamp: new Date().toISOString() 
     });
 
-    // Listen for quiz questions from the server
-    socket.on('quiz_questions', (data) => {
-        console.log("Received quiz questions from server:", data);
-        const quizContainer = document.getElementById('quiz-container');
-        quizContainer.innerHTML = `<h2 class="text-xl font-bold mb-4">${data.quiz_title}</h2>`;
+    // Check for activity every 20 seconds
+    telemetryInterval = setInterval(() => {
+        // Only send if the socket is actually connected to avoid "thousands of messages" error
+        if (!socket.connected) return;
+
+        const now = Date.now();
+        const inactivityDuration = now - lastActivityTime;
+        const isInactive = inactivityDuration > (5 * 60 * 1000); // 5 minutes
         
-        data.quiz_questions.forEach((q, index) => {
+        let telemetryData = {
+            student_id: studentId,
+            activity_type: isInactive ? "inactive" : lastEventName,
+            activity_timestamp: new Date().toISOString()
+        };
 
-            console.log(q.options)
-            const questionDiv = document.createElement('div');
-            questionDiv.className = 'quiz-questions-containers hidden mb-6 p-4 border rounded bg-white shadow';
-            questionDiv.innerHTML = `
-                <p class="mb-2 cursor-pointer font-medium">${index + 1}. ${q.question}</p>
-                ${q.options.map(opt => `<button class="option-btn  w-full text-left px-3 py-2 mb-2 border rounded hover:bg-slate-100 cursor-pointer " data-question-id="${q.question_id}" data-option="${opt.option_id}">${opt.option_title}</button>`).join('')}
-            `;
-            document.querySelectorAll('.option-btn').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                  console.log(e.target);
-                    
-                  
-                   // highlight selected option
-                   //not working in the last question for some reason, need to debug
-                   
-                    const buttons = questionDiv.querySelectorAll('.option-btn');
-                    buttons.forEach(btn => btn.classList.remove('bg-blue-100'));
-                   
-                    e.target.classList.add('bg-blue-100');
+        console.log(`Student - [TELEMETRY] Streaming status: ${telemetryData.activity_type}`);
+        socket.emit('send_telemetry_ping', telemetryData);
+    }, 20 * 1000);
+}
 
-                    // store the answer in a local variable (quuizAnswers) to be sent to the server when the quiz is submitted
-                    const selectedOption = e.target.getAttribute('data-option');
-                    const questionId = e.target.getAttribute('data-question-id');
+// Function to end the session and get the summary
+function stopTelemetrySession() {
+    console.log("Student - [TELEMETRY] Closing session to request summary...");
+    if (telemetryInterval) clearInterval(telemetryInterval);
+    socket.emit('stop_telemetry_session');
+}
 
-                    // remove previous answer for the same question
-                    quuizAnswers = quuizAnswers.filter(ans => ans.question_id !== questionId); 
+// Listen for the final summary from the server
+socket.on('telemetry_summary', (data) => {
+    console.log(`\n--- LECTURE SUMMARY ---`);
+    console.log(data.message);
+    // You could show this in a small toast notification or UI element
+});
 
-                    quuizAnswers.push({ question_id: questionId, selected_option_id: selectedOption });
-                    console.log("Current quiz answers:", quuizAnswers);
-
-                });
-            });
-            const quizNextBtn = document.createElement('button');
-            quizNextBtn.textContent = "Confirm Answer";
-            quizNextBtn.className = 'w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded transition shadow';
-
-            // add a function to the quizNextBtn to go to the next question when clicked, if is the last child of quizContainer, hide the button instead and display a SUBMIT ANSWER button
-            quizNextBtn.addEventListener('click', () => {
-                const currentQuestion = questionDiv;
-                const nextQuestion = currentQuestion.nextElementSibling;
-                
-                if (nextQuestion) {
-                    currentQuestion.classList.add('hidden');
-                    nextQuestion.classList.remove('hidden');
-                } else {
-                    // No more questions, hide the next button and show submit button
-                    quizNextBtn.style.display = 'none';
-                    const submitBtn = document.createElement('button');
-                    submitBtn.textContent = "Submit Answers";
-                    submitBtn.className = 'w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded transition shadow mt-4';
-                    submitBtn.addEventListener('click', () => {
-                        console.log("Submitting quiz answers to server:", quizAnswers);
-
-                        socket.emit('submit_quiz_answers', { student_id: studentId, quiz_id: data.quiz_id, submitted_answers: quizAnswers });
-                        // Here you would typically send the answers back to the server
-                    });
-                    questionDiv.appendChild(submitBtn);
-                }
-            });
-            questionDiv.appendChild(quizNextBtn);
-            
-            quizContainer.appendChild(questionDiv);
-          });
+// ========================================================
+// 3. QUIZ SYSTEM
+// ========================================================
 
 
-          socket.on('submit_quiz_answers_response', (data) => {
-            console.log(`Student - Received quiz submission response from server:`, data);
-            alert(data.message);
-          } );
+const quizCorrectAnswers = [];
+const studentQuizAnswers = [];
+if (startQuizBtn) {
+    startQuizBtn.addEventListener('click', () => {
+        console.log("Student - Requesting quiz questions...");
+        quizContainer.classList.remove('hidden');
+        startQuizBtn.disabled = true;
+        startQuizBtn.style.display = 'none';
+        socket.emit('request_quiz_questions', { quiz_id: 1, student_id: studentId });
+    });
+}
 
-          socket.on('submit_quiz_answers_error', (data) => {
-            console.error(`Student - Error submitting quiz answers:`, data);
-            alert("Error submitting quiz answers: " + data.message);
-          });
+socket.on('quiz_questions', (data) => {
+    console.log("Received quiz questions:", data);
 
+    // store the correct answers to display at end of the quiz
+    data.quiz_questions.forEach(q => {
+        quizCorrectAnswers.push({
+            question_id: q.question_id,
+            question_title: q.question,
+            correct_option_id: q.correct ? q.correct.option_id : null, 
+            correct_option_title: q.correct ? q.correct.option_title : null
+        });
+    }); 
+        console.log(quizCorrectAnswers)
+    quizContainer.innerHTML = `<h2 class="text-xl font-bold mb-4 text-blue-600">${data.quiz_title}</h2>`;
+    
+    const totalQuestions = data.quiz_questions.length;
 
-        document.querySelector('.quiz-questions-containers').classList.remove('hidden'); // Show the first question container
+    data.quiz_questions.forEach((q, index) => {
+        const questionDiv = document.createElement('div');
+        // Hide all questions except the first one
+        questionDiv.className = `quiz-question-block ${index === 0 ? '' : 'hidden'} mb-6 p-4 border rounded-xl bg-white shadow-sm`;
+        
+        questionDiv.innerHTML = `
+            <p class="mb-4 font-bold text-slate-800 text-lg">${index + 1}. ${q.question}</p>
+            <div class="options-list space-y-2">
+                ${q.options.map(opt => `
+                    <button class="option-btn w-full text-left px-4 py-3 border rounded-lg hover:bg-slate-50 transition cursor-pointer flex justify-between items-center group" data-option="${opt.option_id}">
+                        <span>${opt.option_title}</span>
+                        <div class="w-4 h-4 rounded-full border-2 border-slate-200 group-hover:border-blue-400 transition-colors"></div>
+                    </button>
+                `).join('')}
+            </div>
+        `;
 
-        // Add event listeners to option buttons
-        document.querySelectorAll('.option-btn').forEach(btn => {
+        let selectedOptionId = null;
+        const optionButtons = questionDiv.querySelectorAll('.option-btn');
+
+        optionButtons.forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const selectedOption = e.target.getAttribute('data-option');
-                const questionId = e.target.getAttribute('data-question-id');
-                console.log(`Selected option for question ${questionId}: ${selectedOption}`);
-                // Here you would typically send the selected answer back to the server
-                // For this example, we'll just log it to the console
+                // Style cleanup
+                optionButtons.forEach(b => {
+                    b.classList.remove('bg-blue-50', 'border-blue-500', 'ring-2', 'ring-blue-200');
+                    b.querySelector('div').classList.replace('bg-blue-500', 'bg-transparent');
+                    b.querySelector('div').classList.add('border-slate-200');
+                });
+                
+                // Select current
+                const currentBtn = e.currentTarget;
+                currentBtn.classList.add('bg-blue-50', 'border-blue-500', 'ring-2', 'ring-blue-200');
+                currentBtn.querySelector('div').classList.replace('bg-transparent', 'bg-blue-500');
+                currentBtn.querySelector('div').classList.remove('border-slate-200');
+                currentBtn.querySelector('div').classList.add('border-blue-500');
+                currentBtn.querySelector('div').classList.add('bg-blue-500');
+                
+                selectedOptionId = currentBtn.getAttribute('data-option');
             });
         });
 
+        // Add the Action Button (Next or Submit)
+        const actionBtn = document.createElement('button');
+        const isLast = index === totalQuestions - 1;
+        actionBtn.textContent = isLast ? "Submit Final Answer" : "Confirm & Next Question";
+        actionBtn.className = `w-full mt-6 ${isLast ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'} text-white font-bold py-3 px-4 rounded-xl transition shadow-lg`;
 
-    });     
-         
+        actionBtn.addEventListener('click', () => {
+            if (!selectedOptionId) {
+                alert("Please select an answer first!");
+                return;
+            }
 
+          //  save answer to display results
+            studentQuizAnswers.push({
+                question_id: q.question_id,
+                selected_option_id: parseInt(selectedOptionId)
+            });
+            // Emit the answer
+            socket.emit('submit_quiz_answers', { 
+                student_id: studentId, 
+                quiz_id: data.quiz_id, 
+                submitted_answers: {
+                    question_id: parseInt(q.question_id),
+                    selected_option_id: parseInt(selectedOptionId)
+                } 
+            });
 
+            // Transition to next or show completion
+            questionDiv.classList.add('hidden');
+            const nextDiv = questionDiv.nextElementSibling;
+            
+            if (nextDiv && nextDiv.classList.contains('quiz-question-block')) {
+                nextDiv.classList.remove('hidden');
+            } else {
+                quizContainer.innerHTML = `
+                    <div class="text-center py-10 bg-white rounded-xl border border-slate-200 shadow-sm">
+                        <div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <h3 class="text-xl font-bold text-slate-800">Quiz Completed!</h3>   
+                    </div>
+                `;
 
+                // create new element div
+                // const quizCorrectAnswers = [];
+// const studentQuizAnswers = [];
 
+                quizCorrectAnswers.forEach(ans => {
 
+                  console.log(ans)
+                    const correctOptDiv = document.createElement('div');
+                    correctOptDiv.className = 'p-4 bg-slate-50 rounded-lg border border-slate-100 flex justify-between items-center mt-4';
+                    const studentAnswer = studentQuizAnswers.find(a => a.question_id === ans.question_id);
+                    const isCorrect = studentAnswer && studentAnswer.selected_option_id === ans.correct_option_id;
+                    
+                    correctOptDiv.innerHTML = `
+                      <div class="text-center py-10 bg-white rounded-xl border border-slate-200 shadow-sm">
+                      
+                      
+                      
+                      ${
+                        //if correct render green mark, otherwise red 
+                        isCorrect ? 
+                            '<div class="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg></div>' 
+                            : 
+                            '<div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4"><svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></div>'
 
-// LIVE CONNECTION LOGGING
-// Basic connection log
+                      }
+                    
+                     
+                        <p class="mb-4 font-bold text-slate-800 text-lg">${ans.question_id}. ${ans.question_title}</p>
+                        <div class="options-list space-y-2">
+                        <span class="text-slate-700">Your Answer:</span> 
+                        ${studentAnswer ? `Option ${studentAnswer.selected_option_id}` : 'No answer'} 
+                        <div>
+                        Correct: Option ${ans.correct_option_id}
+                        </div>
+                        </div>
+                         
+                    </div>                    
+
+                    `;
+
+                    quizAnswersContainer.appendChild(correctOptDiv); 
+                })
+                
+                quizDetailsModal.classList.remove('hidden')
+
+            }
+        });
+
+        questionDiv.appendChild(actionBtn);
+        quizContainer.appendChild(questionDiv);
+    });
+});
+
+socket.on('submit_quiz_answers_response', (data) => {
+    console.log(`Student - Server Response:`, data);
+});
+
+socket.on('submit_quiz_answers_error', (data) => {
+    console.error(`Student - Error:`, data.message);
+    alert("Submission Error: " + data.message);
+});
+
+// INITIAL CONNECTION
 socket.on('connect', () => {
-    console.log(studentId + ": Connected to Gateway with ID:", socket.id); 
+    console.log(`${studentId}: Connected to Gateway`); 
     AttendanceCheckIn();
+    startTelemetrySession()
+});
+
+window.addEventListener('beforeunload', () => {
+    stopTelemetrySession();
 });
