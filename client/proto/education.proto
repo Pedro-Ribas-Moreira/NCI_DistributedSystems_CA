@@ -15,10 +15,10 @@ service EducationService {
   rpc StudentTelemetry (stream StudentTelemetryRequest) returns (StudentTelemetryResponse);
 // server streaming
   rpc ProfessorAttendenceTracker (ProfessorAttendenceTrackerRequest) returns (stream ProfessorAttendenceTrackerResponse); // DONE
-  rpc ProfessorQuizTracker (ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
 // bidirectional streaming  
     rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
-    
+    rpc ProfessorQuizTracker (stream ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
+
 }
 
 // MESSAGES
@@ -122,6 +122,7 @@ message ProfessorQuizTrackerRequest {
   string professor_id = 1;
   string student_id = 2;
   int32 quiz_id = 3;
+  string message = 4;
 }
 
 message ProfessorQuizTrackerResponse {

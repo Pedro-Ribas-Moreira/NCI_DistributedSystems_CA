@@ -33,7 +33,7 @@ const grpcClient = new educationProto.EducationService(
 
 let activeTelemetryStreams = {};
 const activeQuizStreams = {}; // To track active quiz submission streams per socket
-
+const activeMonitorStream = {}
 // 3. WebSocket Connection Listener
 io.on('connection', (socket) => {
     console.log(`[BRIDGE] Browser connected via WebSocket: ${socket.id}`);
@@ -47,14 +47,26 @@ io.on('connection', (socket) => {
         console.log(`[GATEWAY] Professor ${data.professor_id} requesting monitor for Quiz ${data.quiz_id}`);
 
         // 1. Initiate the Server-Side gRPC Stream
-        const call = grpcClient.ProfessorQuizTracker({
-            professor_id: data.professor_id,
-            quiz_id: data.quiz_id,
-            student_id: data.student_id || "all" 
+        if(!activeMonitorStream[socket.id]){
+             activeMonitorStream[socket.id] = grpcClient.ProfessorQuizTracker();;
+        }
+        const quizStream = activeMonitorStream[socket.id]; // Assign to a local variable
+        quizStream.write({
+            professor_id : data.professor_id,
+            student_id : data.student_id,
+            quiz_id : data.quiz_id,
+            message : data.message
         });
 
+
+    //         const grpcStream = grpcClient.StudentTelemetry((err, response) => {
+    //     if (err) return socket.emit('telemetry_error', err);
+    //     // Send the final summary back to the browser
+    //     socket.emit('telemetry_summary', response);
+    // });
+
         // 2. Listen for "chunks" of data from the gRPC Server
-        call.on('data', (response) => {
+        quizStream.on('data', (response) => {
             console.log(`[GATEWAY] Received gRPC update for Prof ${data.professor_id}:`, response.message);
             
             // 3. Forward the update to the browser immediately
@@ -62,13 +74,13 @@ io.on('connection', (socket) => {
         });
 
         // 4. Handle stream errors
-        call.on('error', (err) => {
+        quizStream.on('error', (err) => {
             console.error('[GATEWAY] gRPC Monitor Error:', err.message);
             socket.emit('quiz_monitor_error', { message: err.message });
         });
 
         // 5. Handle stream closure
-        call.on('end', () => {
+        quizStream.on('end', () => {
             console.log('[GATEWAY] gRPC Monitor Stream ended by server.');
             socket.emit('quiz_monitor_end');
         });
@@ -218,7 +230,7 @@ socket.on('submit_quiz_answers', (data) => {
 
 
 // Start the Bridge Server  
-const PORT = 3001;
+const PORT = 3002;
 server.listen(PORT, () => {
     console.log(`Sever Gateway running!`);
     console.log(`Open your browser and go to: http://localhost:${PORT}`);

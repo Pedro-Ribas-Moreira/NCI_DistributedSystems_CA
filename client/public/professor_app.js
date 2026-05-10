@@ -10,6 +10,8 @@ const quizResponsesDiv = document.getElementById('quiz-responses');
 const detailsModal = document.getElementById('details-modal');
 const detailsContent = document.getElementById('details-content');
 const detailsName = document.getElementById('details-name');
+const feedbackMessage = document.getElementById('professor-msg')
+const feedbackContainer = document.getElementById('feedback-container')
 
 // I'm using a map to keep track of student progress
 let studentQuizProgressMap = new Map(); 
@@ -91,7 +93,14 @@ socket.on('quiz_activation_error', (data) => {
 // ========================================================
 // 3. QUIZ MONITORING (Streaming Data)
 // ========================================================
-
+const listFeedbackMessages = [];
+const getTimeStamp = () => {
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(new Date());
+};
 if (monitorQuizBtn) {
     monitorQuizBtn.addEventListener('click', () => {
         // Show the modal
@@ -101,6 +110,31 @@ if (monitorQuizBtn) {
         console.log(`Professor - Initiating quiz monitoring stream...`);
         socket.emit('start_quiz_monitor_stream', { professor_id: 'prof_123', quiz_id: 1 });
     });
+}
+
+const sendLiveFeedback = ()=>{
+    console.log(feedbackMessage.value) 
+    const msg = feedbackMessage.value
+    const timestamp = getTimeStamp();
+    
+    listFeedbackMessages.push({msg: msg, timestamp: timestamp})
+    console.log(listFeedbackMessages)
+    feedbackContainer.innerHTML = ''
+
+    socket.emit('start_quiz_monitor_stream', { professor_id: 'prof_123', quiz_id: 1, message: msg})
+    listFeedbackMessages.forEach((item)=>{
+        console.log(item)
+        const msgLi = document.createElement('li');
+        msgLi.className = 'p-3 border-b border-slate-100 flex items-center justify-between bg-blue-100 hover:bg-slate-50 transition rounded-lg'
+        msgLi.innerHTML = `
+          <span class="text-slate-700 font-medium">${item.msg}</span>
+         <span class="text-xs">${item.timestamp}</span>`
+
+         feedbackContainer.appendChild(msgLi)
+    })
+    feedbackMessage.value = ''
+    
+    
 }
 
 // This listener catches real-time updates whenever a student submits an answer
@@ -179,6 +213,7 @@ function showStudentDetails(sid) {
                     <span class="text-slate-500 text-sm font-medium italic">Question ${ans.question_id}</span>
                     <span class="text-blue-700 font-bold bg-blue-50 px-3 py-1 rounded">Option ${ans.selected_option_id}</span>
                 `;
+
                 detailsContent.appendChild(row);
             });
         }

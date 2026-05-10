@@ -68,27 +68,34 @@ const ProfessorAttendenceTracker =  (call) => {
 }
 
 const ProfessorQuizTracker = (call) => { 
-    console.log(`[SERVER] Professor ${call.request.professor_id} connected to Quiz Monitor.`);
+    console.log(`[SERVER] Professor connected to Quiz Monitor.`);
     
-    // Store the stream for later use in StudentQuizSubmission
-    professorQuizStream = call; 
-    const quizId = call.request.quiz_id;
-
-    // 1. Check if the quiz exists and activate it if needed
-    const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
-    if (quiz) {
-        if (quiz.status !== 'active') {
-            quiz.status = 'active';
-            console.log(`[SERVER] Quiz "${quiz.title}" is now active.`);
-        }
+    if(!professorQuizStream){
+        professorQuizStream = call; 
+    }
+     call.on('data', (data)=>{
+        console.log('Server - Quiz Tracker')
+        console.log(data)
         
-        // Push an initial confirmation message to the professor
-        call.write({
-            quiz_id: quizId,
-            message: `Monitoring started for: ${quiz.title}. Status: ${quiz.status}`
-        });
-    }   
-    
+            const quizId = call.quiz_id;
+        
+            // 1. Check if the quiz exists and activate it if needed
+            const quiz = quizList.quiz_list.find(q => q.id === parseInt(quizId));
+            if (quiz) {
+                if (quiz.status !== 'active') {
+                    quiz.status = 'active';
+                    console.log(`[SERVER] Quiz "${quiz.title}" is now active.`);
+                }
+                
+                // Push an initial confirmation message to the professor
+                call.write({
+                    quiz_id: quizId,
+                    message: `Monitoring started for: ${quiz.title}. Status: ${quiz.status}`
+                });
+            }   
+        
+    })
+
     // 2. Clean up when professor disconnects
     call.on('end', () => {
         console.log('[SERVER] Professor disconnected from quiz tracker.');

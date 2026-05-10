@@ -88,6 +88,7 @@
                     <h3 class="text-2xl font-bold text-slate-800">Live Quiz Monitoring</h3>
                     <p class="text-sm text-slate-500">Real-time engagement tracking for active students.</p>
                 </div>
+ 
                 <button onclick="document.getElementById('monitor-container').classList.add('hidden')" class="text-slate-400 hover:text-slate-600 transition">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
@@ -98,10 +99,40 @@
                 <p class="col-span-full text-center text-slate-400 italic py-10">Waiting for first response...</p>
             </div>
 
-            <div class="p-4 border-t border-slate-100 flex justify-end bg-white">
-                <button onclick="document.getElementById('monitor-container').classList.add('hidden')" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold py-2 px-6 rounded-lg transition">Close</button>
+             <div class="p-4 m-6 border-t border-slate-100">
+                <label for="professor-msg" class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                    Send Live Feedback
+                </label>
+                <div class="flex gap-2">
+                    <input 
+                        type="text" 
+                        id="professor-msg" 
+                        placeholder="e.g. Keep going! / Check Q2..." 
+                        class="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    >
+                    <button 
+                        onclick="sendLiveFeedback()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center justify-center shadow-sm"
+                        title="Send message"
+                    >
+                    Send
+                </button>
             </div>
-        </div>
+            <div class="p-6 mt-4 overflow-y-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 bg-slate-50">
+                    <ul id="feedback-container" class="space-y-2 text-sm">
+                        <li class="p-3 text-slate-400 italic text-center mt-4">
+                            Waiting for messages...
+
+
+                            
+                        </li>
+                     
+            
+            
+                    </ul>
+            </div>
+            </div>
+           
     </div>
 
     <!-- SUB-MODAL: STUDENT DETAILS -->
@@ -114,6 +145,7 @@
             <div id="details-content" class="space-y-3">
                 <!-- Answer list injected here -->
             </div>
+
             <button onclick="document.getElementById('details-modal').classList.add('hidden')" class="mt-6 w-full bg-blue-600 text-white py-2 rounded-lg font-bold">Done</button>
         </div>
     </div>
