@@ -106,7 +106,7 @@ function stopTelemetrySession() {
 
 socket.on('telemetry_summary', (data) => {
     console.log(`\n--- LECTURE SUMMARY ---`);
-    console.log(data.message);
+    console.log(data);
 });
 
 // ==========================================
@@ -129,7 +129,7 @@ if (startQuizBtn) {
 
 socket.on('quiz_monitor_update', (data) => {
     console.log("Student - Live update received:", data);
-    if(data.qu)
+  
 
     if(data.type === 'Feedback'){
         showProfessorFeedbackMessage(data.message)
@@ -181,7 +181,7 @@ function showProfessorFeedbackMessage(text) {
 socket.on('quiz_questions', (data) => {
     console.log("Received quiz questions:", data);
 
-    if(data.quiz_questions.length > 1){
+    if(data.quiz_questions.length < 1){
         quizContainer.innerHTML = `<h2 class="text-xl font-bold mb-4 text-blue-600">Quiz not active yet!</h2>`;
 
         startQuizBtn.disabled = false;

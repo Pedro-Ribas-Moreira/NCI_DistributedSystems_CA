@@ -95,8 +95,6 @@ io.on('connection', (socket) => {
 
     socket.on('student_checkin', (data) => {
         if (!attendanceClient) return socket.emit('checkin_error', { message: 'Service not ready.' });
-
-
     // ADVANCE FEATURE - Add 5 seconds deadline for the request
       const deadline = new Date(Date.now() + 5000);
 

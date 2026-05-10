@@ -21,6 +21,12 @@ const StudentTelemetry = (call, callback) => {
         studentId = data.student_id;
     });
     call.on('end', () => {
+
+        console.log({
+            student_id: studentId,
+            telemetry_status: "Complete",
+            message: `Captured ${eventCount} engagement events.`
+        })
         callback(null, {
             student_id: studentId,
             telemetry_status: "Complete",
