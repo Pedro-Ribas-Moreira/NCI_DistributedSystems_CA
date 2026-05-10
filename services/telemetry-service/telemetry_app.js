@@ -1,6 +1,8 @@
 const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
+const { Bonjour } = require('bonjour-service');
+const bonjour = new Bonjour();
 
 const PROTO_PATH = path.join(__dirname, './proto/telemetry.proto');
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -29,4 +31,9 @@ server.addService(telemetryProto.TelemetryService.service, { StudentTelemetry })
 
 server.bindAsync('0.0.0.0:50053', grpc.ServerCredentials.createInsecure(), () => {
     console.log('Telemetry Service running on port 50053');
+});
+bonjour.publish({ 
+    name: 'Education-Telemetry-Service', 
+    type: 'grpc', 
+    port: 50053 
 });

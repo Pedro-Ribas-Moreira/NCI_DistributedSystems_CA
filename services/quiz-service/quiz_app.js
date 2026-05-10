@@ -2,6 +2,8 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const quizList = require('./assets/quiz_questions.js'); //
+const { Bonjour } = require('bonjour-service');
+const bonjour = new Bonjour();
 
 const PROTO_PATH = path.join(__dirname, './proto/quiz.proto');
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -179,4 +181,33 @@ server.bindAsync('0.0.0.0:50052', grpc.ServerCredentials.createInsecure(), () =>
     console.log('Quiz Service running on port 50052');
 });
 
+bonjour.publish({ 
+    name: 'Education-Quiz-Service', 
+    type: 'grpc', 
+    port: 50052 
+});
 
+
+const gracefulShutdown = () => {
+    console.log('\n[QUIZ-SERVICE] Shutdown signal received. Cleaning up...');
+
+    // Notify all active streams before closing
+    monitorStreams.forEach(stream => {
+        try { 
+            stream.write({ message: "Quiz Server is shutting down...", type: "Shutdown" });
+            stream.end(); 
+        } catch (e) {}
+    });
+
+    server.tryShutdown((err) => {
+        if (err) {
+            console.error('[QUIZ-SERVICE] Shutdown error:', err);
+            server.forceShutdown();
+        }
+        console.log('[QUIZ-SERVICE] Stopped.');
+        process.exit(0);
+    });
+};
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);

@@ -2,6 +2,8 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 const path = require('path');
 const studentsList = require('./assets/students.js'); //
+const { Bonjour } = require('bonjour-service');
+const bonjour = new Bonjour();
 
 const PROTO_PATH = path.join(__dirname, './proto/attendance.proto');
 const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
@@ -57,4 +59,10 @@ server.addService(attendanceProto.AttendanceService.service, {
 
 server.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), () => {
     console.log('Attendance Service running on port 50051');
+});
+
+bonjour.publish({ 
+    name: 'Education-Attendance-Service', 
+    type: 'grpc', 
+    port: 50051 
 });
