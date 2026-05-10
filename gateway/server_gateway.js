@@ -67,7 +67,7 @@ browser.on('up', (service) => {
 });
 
 // ==========================================
-// 3. STATE TRACKING (Active Streams)
+// 3. STATE TRACKING 
 // ==========================================
 const activeStreams = {
     telemetry: {}, 
@@ -95,7 +95,15 @@ io.on('connection', (socket) => {
 
     socket.on('student_checkin', (data) => {
         if (!attendanceClient) return socket.emit('checkin_error', { message: 'Service not ready.' });
-        attendanceClient.StudentAttendenceCheckIn(data, (err, res) => {
+
+
+    // ADVANCE FEATURE - Add 5 seconds deadline for the request
+      const deadline = new Date(Date.now() + 5000);
+
+        attendanceClient.StudentAttendenceCheckIn(data, { deadline }, (err, res) => {
+            if (err && err.code === grpc.status.DEADLINE_EXCEEDED) {
+                return socket.emit('checkin_error', { message: 'The attendance service timed out.' });
+            }
             err ? socket.emit('checkin_error', err) : socket.emit('checkin_success', res);
         });
     });
@@ -142,9 +150,14 @@ io.on('connection', (socket) => {
 
     socket.on('request_quiz_questions', (data) => {
         if (!quizClient) return;
-        quizClient.StudentQuizRequest(data, (err, res) => {
-            err ? socket.emit('quiz_questions_error', err) : socket.emit('quiz_questions', res);
-        });
+
+        // ADVANCED FEATURE: Passing Metadata Key
+        const meta = new grpc.Metadata();
+        meta.add('authorization', 'secure-token-123');
+        
+        quizClient.StudentQuizRequest(data, meta, (err, res) => {
+                err ? socket.emit('quiz_questions_error', err) : socket.emit('quiz_questions', res);
+            });
     });
 
     // --- SERVICE 3: TELEMETRY ---

@@ -33,13 +33,21 @@ const ProfessorAttendenceTracker = (call) => {
 }; //
 
 const StudentAttendenceCheckIn = (call, callback) => {
-    const studentId = parseInt(call.request.student_id);
-    const student = studentsList.find(s => s.id === studentId);
+    const { student_id, student_location } = call.request;
+
+    // ADVANCED ERROR HANDLING: Validation
+    if (!student_id || student_id === "") {
+        return callback({
+            code: grpc.status.INVALID_ARGUMENT,
+            message: "Student ID is mandatory for check-in."
+        });
+    }
+    const student = studentsList.find(s => s.id === parseInt(student_id));
     let response = "404 - Not Found";
 
     if (student) {
         student.checkInStatus = true;
-        student.location = call.request.student_location;
+        student.location = student_location
         response = "200 - Checked in successfully.";
         if (professorAttendenceStream) {
             professorAttendenceStream.write({
@@ -48,6 +56,7 @@ const StudentAttendenceCheckIn = (call, callback) => {
             });
         }
     }
+    console.log('Student Logged In')
     callback(null, { confirmation_response: response });
 }; //
 

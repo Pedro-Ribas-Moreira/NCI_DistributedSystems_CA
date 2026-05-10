@@ -12,6 +12,9 @@ const telemetryProto = grpc.loadPackageDefinition(packageDefinition).telemetry;
 
 const StudentTelemetry = (call, callback) => {
     let eventCount = 0;
+    if(eventCount == 0){
+        console.log('Iniating Telemetry')
+    }
     let studentId = "Unknown";
     call.on('data', (data) => {
         eventCount++;

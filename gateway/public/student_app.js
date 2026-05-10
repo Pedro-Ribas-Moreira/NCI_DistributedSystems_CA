@@ -54,8 +54,8 @@ socket.on('checkin_success', (response) => {
     console.log(`${studentId}: Check-in confirmed:`, response);
 });
 
-socket.on('checkin_error', (data) => {
-    console.error(`${studentId}: Check-in failed:`, data.message);
+socket.on('checkin_error', (err) => {
+    console.error(err);
 });
 
 // ==========================================
@@ -129,6 +129,8 @@ if (startQuizBtn) {
 
 socket.on('quiz_monitor_update', (data) => {
     console.log("Student - Live update received:", data);
+    if(data.qu)
+
     if(data.type === 'Feedback'){
         showProfessorFeedbackMessage(data.message)
     }
@@ -179,6 +181,14 @@ function showProfessorFeedbackMessage(text) {
 socket.on('quiz_questions', (data) => {
     console.log("Received quiz questions:", data);
 
+    if(data.quiz_questions.length > 1){
+        quizContainer.innerHTML = `<h2 class="text-xl font-bold mb-4 text-blue-600">Quiz not active yet!</h2>`;
+
+        startQuizBtn.disabled = false;
+        startQuizBtn.style.display = 'block';
+
+        return
+    }
     data.quiz_questions.forEach(q => {
         quizCorrectAnswers.push({
             question_id: q.question_id,

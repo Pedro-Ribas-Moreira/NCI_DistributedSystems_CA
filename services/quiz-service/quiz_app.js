@@ -50,6 +50,15 @@ const ProfessorQuizActivation = (call, callback) => {
     }
 }
 const StudentQuizRequest = (call, callback) => {
+    // ADVANCED FEATURE
+    const token = call.metadata.get('authorization')[0];
+    if (token !== 'secure-token-123') {
+            return callback({
+                code: grpc.status.UNAUTHENTICATED,
+                message: "Invalid API Token"   
+            });
+        }
+
     const studentId = call.request.student_id;
     const quizId = call.request.quiz_id;
 
@@ -99,13 +108,11 @@ const StudentQuizSubmission = (call) => {
             const quiz = quizList.quiz_list.find(q => q.id === quizId);
             
             if (!quiz) {
-                console.error(`[ERROR] Quiz ${quizId} not found.`);
-                return call.write({
-                    student_id: studentId,
-                    quiz_id: quizId,
-                    submission_status: "Error",
-                    feedback: "Error: Quiz not found on server."
-                });
+                // REMOTE ERROR HANDLING
+                return call.emit('error', {
+                    code: grpc.status.NOT_FOUND,
+                    details: `Service Error: Quiz ID ${quizId} is not hosted on this microservice.`
+            });
             }
 
             // 2. Logic: Save/Update submission
