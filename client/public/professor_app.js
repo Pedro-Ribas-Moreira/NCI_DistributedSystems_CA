@@ -1,44 +1,58 @@
 const socket = io();
 
+// ==========================================
+// 1. DOM SELECTORS
+// ==========================================
+// Roster / Sidebar
 const rosterDiv = document.getElementById('student-roster');
-const startQuizBtn = document.getElementById('start-quiz-btn');
-const monitorQuizBtn = document.getElementById('monitor-quiz-btn');
 const studentCountTotal = document.getElementById('students-online-total');
 
+// Quiz Control
+const startQuizBtn = document.getElementById('start-quiz-btn');
+const monitorQuizBtn = document.getElementById('monitor-quiz-btn');
+
+// Monitoring Dashboard
 const monitorContainer = document.getElementById('monitor-container');
 const quizResponsesDiv = document.getElementById('quiz-responses');
+
+// Feedback
+const feedbackMessage = document.getElementById('professor-msg');
+const feedbackContainer = document.getElementById('feedback-container');
+
+// Modal Details
 const detailsModal = document.getElementById('details-modal');
 const detailsContent = document.getElementById('details-content');
 const detailsName = document.getElementById('details-name');
-const feedbackMessage = document.getElementById('professor-msg')
-const feedbackContainer = document.getElementById('feedback-container')
 
-// I'm using a map to keep track of student progress
-let studentQuizProgressMap = new Map(); 
-let onlineStudentsMap = new Map(); // Maps student IDs to Names from the roster
+// ==========================================
+// 2. STATE MANAGEMENT
+// ==========================================
+let onlineStudentsMap = new Map();      // Student IDs -> Names
+let studentQuizProgressMap = new Map(); // Student IDs -> Progress/Answers
+const listFeedbackMessages = [];        // Local history of sent messages
 let currentQuiz = {};
-// 1. ATTENDENCE CHECK IN SERVICE
 
+// ==========================================
+// 3. INITIALIZATION
+// ==========================================
 console.log(`Professor - Requesting class roster stream...`);
 socket.emit('start_roster_stream', { professor_id: 'prof_123' });
 
+// ==========================================
+// 4. ATTENDANCE / ROSTER LOGIC
+// ==========================================
 socket.on('roster_update', (data) => {
     let onlineCount = 0;
     rosterDiv.innerHTML = '';
     
-    // check if we have students in the roster
     if (data.student_attendance_info && data.student_attendance_info.length > 0) {
         data.student_attendance_info.forEach(student => {
-            // Store the student name locally
             onlineStudentsMap.set(student.id, student.student_name);
             const isOnline = student.check_in_status === true;
-           
             if (isOnline) onlineCount++;
             
             const li = document.createElement('li');
-           
             li.className = 'p-3 border-b border-slate-100 flex items-center justify-between bg-white hover:bg-slate-50 transition rounded-lg';
-            
             li.innerHTML = `
                 <span class="text-slate-700 font-medium">${student.student_name}</span>
                 <span class="w-3 h-3 rounded-full ${isOnline ? 'bg-green-500' : 'bg-slate-300'}"></span>
@@ -49,16 +63,14 @@ socket.on('roster_update', (data) => {
         rosterDiv.innerHTML = '<li class="p-4 text-center text-slate-400 italic">No students found.</li>';
     }
     
-    // Update the "X / 10 Online"
     if (studentCountTotal) {
         studentCountTotal.textContent = onlineCount;
     }
 });
 
-// ========================================================
-// 2. QUIZ ACTIVATION (Simple RPC)
-// ========================================================
-
+// ==========================================
+// 5. QUIZ ACTIVATION LOGIC
+// ==========================================
 if (startQuizBtn) {
     startQuizBtn.addEventListener('click', () => {
         console.log("Professor - Activating quiz...");
@@ -74,11 +86,7 @@ socket.on('quiz_activation_success', (data) => {
         startQuizBtn.innerText = "Quiz Active!";
         startQuizBtn.className = "w-full bg-green-600 text-white font-bold py-3 px-4 rounded transition shadow mb-3 opacity-50 cursor-not-allowed";
     }
-    
-    // Enable monitoring now that the quiz is live
-    if (monitorQuizBtn) {
-        monitorQuizBtn.disabled = false;
-    }
+    if (monitorQuizBtn) monitorQuizBtn.disabled = false;
 });
 
 socket.on('quiz_activation_error', (data) => {
@@ -90,81 +98,35 @@ socket.on('quiz_activation_error', (data) => {
     }
 });
 
-// ========================================================
-// 3. QUIZ MONITORING (Streaming Data)
-// ========================================================
-const listFeedbackMessages = [];
-const getTimeStamp = () => {
-  return new Intl.DateTimeFormat('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).format(new Date());
-};
+// ==========================================
+// 6. QUIZ MONITORING & CARDS
+// ==========================================
 if (monitorQuizBtn) {
     monitorQuizBtn.addEventListener('click', () => {
-        // Show the modal
-        if (monitorContainer) {
-            monitorContainer.classList.remove('hidden');
-        }
+        if (monitorContainer) monitorContainer.classList.remove('hidden');
         console.log(`Professor - Initiating quiz monitoring stream...`);
         socket.emit('start_quiz_monitor_stream', { professor_id: 'prof_123', quiz_id: 1 });
     });
 }
 
-const sendLiveFeedback = ()=>{
-    console.log(feedbackMessage.value) 
-    const msg = feedbackMessage.value
-    const timestamp = getTimeStamp();
-    
-    listFeedbackMessages.push({msg: msg, timestamp: timestamp})
-    console.log(listFeedbackMessages)
-    feedbackContainer.innerHTML = ''
-
-    socket.emit('start_quiz_monitor_stream', { professor_id: 'prof_123', quiz_id: 1, message: msg})
-    listFeedbackMessages.forEach((item)=>{
-        console.log(item)
-        const msgLi = document.createElement('li');
-        msgLi.className = 'p-3 border-b border-slate-100 flex items-center justify-between bg-blue-100 hover:bg-slate-50 transition rounded-lg'
-        msgLi.innerHTML = `
-          <span class="text-slate-700 font-medium">${item.msg}</span>
-         <span class="text-xs">${item.timestamp}</span>`
-
-         feedbackContainer.appendChild(msgLi)
-    })
-    feedbackMessage.value = ''
-    
-    
-}
-
-// This listener catches real-time updates whenever a student submits an answer
 socket.on('quiz_monitor_update', (data) => {
     console.log("Professor - Live update received:", data);
-    
-    if(!data.student_id){
-        console.log("No student ID found in the update, skipping...");
-        return;
-    }
-    console.log(data)
+    if(!data.student_id) return;
+
     const sid = data.student_id;
     const sName = onlineStudentsMap.get(sid) || `Student ${sid}`;
     
-    // Update the local state map with the new answer data
     studentQuizProgressMap.set(sid, {
         name: sName,
         answers: data.submitted_answers || [],
-        total: 5// the quiz contains only 5 questions
+        total: 5 
     });
 
-    // Re-render the grid cards
     renderMonitorCards();
 });
 
 function renderMonitorCards() {
-    if (!quizResponsesDiv) return;
-    if (studentQuizProgressMap.size === 0) return;
-
-    // Clear the placeholder
+    if (!quizResponsesDiv || studentQuizProgressMap.size === 0) return;
     quizResponsesDiv.innerHTML = '';
 
     studentQuizProgressMap.forEach((student, sid) => {
@@ -172,10 +134,8 @@ function renderMonitorCards() {
         const total = 5;
         const isFinished = count >= total;
 
-        console.log(count, total, isFinished)
         const card = document.createElement('div');
         card.className = `p-4 rounded-xl border bg-white shadow-sm cursor-pointer transition transform hover:scale-[1.02] ${isFinished ? 'border-green-200 bg-green-50' : 'border-slate-200'}`;
-        
         card.innerHTML = `
             <div class="flex justify-between items-center mb-2">
                 <h3 class="font-bold text-slate-800">${student.name}</h3>
@@ -188,8 +148,6 @@ function renderMonitorCards() {
                 Progress: ${count} / ${total}
             </p>
         `;
-
-        // Click card to open the sub-modal with details
         card.onclick = () => showStudentDetails(sid);
         quizResponsesDiv.appendChild(card);
     });
@@ -202,7 +160,6 @@ function showStudentDetails(sid) {
     if (detailsName) detailsName.innerText = `Details: ${studentData.name}`;
     if (detailsContent) {
         detailsContent.innerHTML = '';
-
         if (studentData.answers.length === 0) {
             detailsContent.innerHTML = '<p class="text-slate-400 italic text-sm py-4 text-center">No answers yet.</p>';
         } else {
@@ -213,18 +170,47 @@ function showStudentDetails(sid) {
                     <span class="text-slate-500 text-sm font-medium italic">Question ${ans.question_id}</span>
                     <span class="text-blue-700 font-bold bg-blue-50 px-3 py-1 rounded">Option ${ans.selected_option_id}</span>
                 `;
-
                 detailsContent.appendChild(row);
             });
         }
     }
-
-    if (detailsModal) {
-        detailsModal.classList.remove('hidden');
-    }
+    if (detailsModal) detailsModal.classList.remove('hidden');
 }
 
-// Error & End Handlers
+// ==========================================
+// 7. LIVE FEEDBACK LOGIC
+// ==========================================
+const sendLiveFeedback = () => {
+    const msg = feedbackMessage.value;
+    const timestamp = getTimeStamp();
+    
+    listFeedbackMessages.push({msg: msg, timestamp: timestamp});
+    feedbackContainer.innerHTML = '';
+
+    socket.emit('start_quiz_monitor_stream', { professor_id: 'prof_123', quiz_id: 1, message: msg });
+
+    listFeedbackMessages.forEach((item) => {
+        const msgLi = document.createElement('li');
+        msgLi.className = 'p-3 border-b border-slate-100 flex items-center justify-between bg-blue-100 hover:bg-slate-50 transition rounded-lg';
+        msgLi.innerHTML = `
+          <span class="text-slate-700 font-medium">${item.msg}</span>
+          <span class="text-xs">${item.timestamp}</span>`;
+        feedbackContainer.appendChild(msgLi);
+    });
+    feedbackMessage.value = '';
+};
+
+// ==========================================
+// 8. UTILITIES & ERROR HANDLING
+// ==========================================
+const getTimeStamp = () => {
+  return new Intl.DateTimeFormat('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(new Date());
+};
+
 socket.on('quiz_monitor_error', (data) => {
     console.error("Monitor Error:", data.message);
     alert("Monitoring error: " + data.message);
