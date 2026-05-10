@@ -178,3 +178,5 @@ server.addService(quizProto.QuizService.service, {
 server.bindAsync('0.0.0.0:50052', grpc.ServerCredentials.createInsecure(), () => {
     console.log('Quiz Service running on port 50052');
 });
+
+

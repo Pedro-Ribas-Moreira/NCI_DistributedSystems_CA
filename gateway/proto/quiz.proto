@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package quiz;
+
+service QuizService {
+  // Simple RPCs for setup [cite: 75]
+  rpc StudentQuizRequest (StudentQuizRequest) returns (StudentQuizResponse);
+  rpc ProfessorQuizActivation (ProfessorQuizActivationRequest) returns (ProfessorQuizActivationResponse);
+  
+  // Bidirectional streaming for real-time submission and monitoring [cite: 77, 78]
+  rpc StudentQuizSubmission (stream StudentQuizSubmissionRequest) returns (stream StudentQuizSubmissionResponse);
+  rpc ProfessorQuizTracker (stream ProfessorQuizTrackerRequest) returns (stream ProfessorQuizTrackerResponse);
+}
+
+message StudentQuizRequest {
+  int32 quiz_id = 1;
+  string student_id = 2;
+}
+
+message StudentQuizResponse {
+  int32 quiz_id = 1;
+  string quiz_title = 2;
+  repeated QuizQuestions quiz_questions = 3;
+  string message = 4;
+}
+
+message QuizQuestions {
+  int32 question_id = 1;
+  string question = 2;
+  repeated QuizOptions options = 3; 
+  QuizOptions correct = 4;
+}
+
+message QuizOptions {
+  int32 option_id = 1;
+  string option_title = 2;
+}
+
+message StudentQuizSubmissionRequest {
+  string student_id = 1;
+  int32 quiz_id = 2;
+  QuizAnswer submitted_answers = 3;
+} 
+
+message QuizAnswer {
+  int32 question_id = 1;
+  int32 selected_option_id = 2;
+}
+
+message StudentQuizSubmissionResponse {
+  string student_id = 1;
+  int32 quiz_id = 2;
+  string submission_status = 3;
+  string feedback = 4;
+}
+
+message ProfessorQuizTrackerRequest {
+  string professor_id = 1;
+  string student_id = 2;
+  int32 quiz_id = 3;
+  string message = 4;
+  string type = 5;
+}
+
+message ProfessorQuizTrackerResponse {
+  string student_id = 1;
+  int32 quiz_id = 2;
+  repeated QuizAnswer submitted_answers = 3;
+  string message = 4;
+  string type = 5;
+}
+
+message ProfessorQuizActivationRequest {
+  string professor_id = 1;
+  int32 quiz_id = 2;
+}
+
+message ProfessorQuizActivationResponse {
+  string message = 4;
+}

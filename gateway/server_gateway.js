@@ -1,9 +1,8 @@
 /**
  * NOTE FOR CA REPORT:
- * This file implements the "Backend-For-Frontend" (BFF) / API Gateway pattern. 
- * Since web browsers lack native support for HTTP/2 trailing headers required by gRPC, 
- * this Express/Socket.io server acts as a bridge, translating browser WebSockets 
- * into high-performance gRPC calls for the Education microservice.
+ * Updated Gateway to support a Microservices Architecture. 
+ * The bridge now manages three separate gRPC clients, each connecting to 
+ * a specialized service (Attendance, Quiz, and Telemetry) on different ports.
  */
 
 const express = require('express');
@@ -17,74 +16,102 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-
-// --- Middleware ---
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- gRPC Client Setup ---
-const PROTO_PATH = path.join(__dirname, './proto/education.proto');
-const packageDefinition = protoLoader.loadSync(PROTO_PATH, {
+// ==========================================
+// 1. gRPC CLIENTS SETUP (Three separate services)
+// ==========================================
+
+const loaderOptions = {
     keepCase: true, longs: String, enums: String, defaults: true, oneofs: true
-});
-const educationProto = grpc.loadPackageDefinition(packageDefinition).education;
-const grpcClient = new educationProto.EducationService(
-    'localhost:50053',
-    grpc.credentials.createInsecure()
-);
-
-
-
-// --- Stream Tracking ---
-const activeStreams = {
-    telemetry: {}, // Student Telemetry
-    quiz: {},      // Student Submission
-    monitor: {},   // Professor Monitoring
-    roster: {}     // Professor Roster
 };
 
-// --- WebSocket Logic ---
+// --- Attendance Service (Port 50051) ---
+const attendancePkg = protoLoader.loadSync(path.join(__dirname, './proto/attendance.proto'), loaderOptions);
+const attendanceProto = grpc.loadPackageDefinition(attendancePkg).attendance;
+const attendanceClient = new attendanceProto.AttendanceService('localhost:50051', grpc.credentials.createInsecure());
+
+// --- Quiz Service (Port 50052) ---
+const quizPkg = protoLoader.loadSync(path.join(__dirname, './proto/quiz.proto'), loaderOptions);
+const quizProto = grpc.loadPackageDefinition(quizPkg).quiz;
+const quizClient = new quizProto.QuizService('localhost:50052', grpc.credentials.createInsecure());
+
+// --- Telemetry Service (Port 50053) ---
+const telemetryPkg = protoLoader.loadSync(path.join(__dirname, './proto/telemetry.proto'), loaderOptions);
+const telemetryProto = grpc.loadPackageDefinition(telemetryPkg).telemetry;
+const telemetryClient = new telemetryProto.TelemetryService('localhost:50053', grpc.credentials.createInsecure());
+
+// ==========================================
+// 2. STATE TRACKING
+// ==========================================
+const activeStreams = {
+    telemetry: {}, 
+    quiz: {},      
+    monitor: {},   
+    roster: {}     
+};
+
+// ==========================================
+// 3. WEBSOCKET ROUTING LOGIC
+// ==========================================
 io.on('connection', (socket) => {
     const sid = socket.id;
     console.log(`[BRIDGE] Connected: ${sid}`);
 
-    // 1. PROFESSOR / STUDENT: Quiz Monitoring (Bidirectional)
+    // --- SERVICE 1: ATTENDANCE ---
+    socket.on('start_roster_stream', (data) => {
+        const stream = attendanceClient.ProfessorAttendenceTracker({ professor_id: data.professor_id });
+        stream.on('data', (res) => socket.emit('roster_update', res));
+        stream.on('error', (err) => console.error('[BRIDGE] Attendance Error:', err.message));
+        activeStreams.roster[sid] = stream;
+    });
+
+    socket.on('student_checkin', (data) => {
+        attendanceClient.StudentAttendenceCheckIn(data, (err, res) => {
+            err ? socket.emit('checkin_error', err) : socket.emit('checkin_success', res);
+        });
+    });
+
+    // --- SERVICE 2: QUIZ ---
     socket.on('start_quiz_monitor_stream', (data) => {
         if (!activeStreams.monitor[sid]) {
-            const stream = grpcClient.ProfessorQuizTracker();
-
-            stream.on('data', (response) => {
-                console.log('BRIDGE ', response)
-                    socket.emit('quiz_monitor_update', response)
-                });
+            const stream = quizClient.ProfessorQuizTracker();
+            stream.on('data', (response) => socket.emit('quiz_monitor_update', response));
             stream.on('error', (err) => socket.emit('quiz_monitor_error', { message: err.message }));
-            stream.on('end', () => socket.emit('quiz_monitor_end'));
-
             activeStreams.monitor[sid] = stream;
         }
-
         activeStreams.monitor[sid].write({
             professor_id: data.professor_id,
-            student_id: data.student_id,
             quiz_id: data.quiz_id,
             message: data.message,
             type: data.type
         });
     });
 
-    // 2. PROFESSOR: Live Roster (Server-Side Stream)
-    socket.on('start_roster_stream', (data) => {
-        const stream = grpcClient.ProfessorAttendenceTracker({ professor_id: data.professor_id });
-
-        stream.on('data', (res) => socket.emit('roster_update', res));
-        stream.on('end', () => socket.emit('roster_ended'));
-        stream.on('error', (err) => console.error('[BRIDGE] Roster Error:', err.message));
-
-        activeStreams.roster[sid] = stream;
+    socket.on('submit_quiz_answers', (data) => {
+        if (!activeStreams.quiz[sid]) {
+            const stream = quizClient.StudentQuizSubmission();
+            stream.on('data', (res) => socket.emit('submit_quiz_answers_response', res));
+            activeStreams.quiz[sid] = stream;
+        }
+        activeStreams.quiz[sid].write(data);
     });
 
-    // 3. STUDENT: Telemetry (Client-Side Stream)
+    socket.on('activate_quiz', (data) => {
+        quizClient.ProfessorQuizActivation(data, (err, res) => {
+            err ? socket.emit('quiz_activation_error', err) : socket.emit('quiz_activation_success', res);
+        });
+    });
+
+    socket.on('request_quiz_questions', (data) => {
+        quizClient.StudentQuizRequest(data, (err, res) => {
+            err ? socket.emit('quiz_questions_error', err) : socket.emit('quiz_questions', res);
+        });
+    });
+
+    // --- SERVICE 3: TELEMETRY ---
     socket.on('start_telemetry_session', () => {
-        activeStreams.telemetry[sid] = grpcClient.StudentTelemetry((err, response) => {
+        activeStreams.telemetry[sid] = telemetryClient.StudentTelemetry((err, response) => {
             if (err) return socket.emit('telemetry_error', err);
             socket.emit('telemetry_summary', response);
         });
@@ -94,105 +121,39 @@ io.on('connection', (socket) => {
         if (activeStreams.telemetry[sid]) activeStreams.telemetry[sid].write(data);
     });
 
-    socket.on('stop_telemetry_session', () => {
-        if (activeStreams.telemetry[sid]) {
-            activeStreams.telemetry[sid].end();
-            delete activeStreams.telemetry[sid];
-        }
-    });
-
-    // 4. STUDENT: Quiz Submission (Bidirectional)
-    socket.on('submit_quiz_answers', (data) => {
-        if (!activeStreams.quiz[sid]) {
-            const stream = grpcClient.StudentQuizSubmission();
-            stream.on('data', (res) => socket.emit('submit_quiz_answers_response', res));
-            activeStreams.quiz[sid] = stream;
-        }
-        activeStreams.quiz[sid].write(data);
-    });
-
-    // 5. STANDARD RPCs (Unary)
-    socket.on('activate_quiz', (data) => {
-        grpcClient.ProfessorQuizActivation(data, (err, res) => {
-            err ? socket.emit('quiz_activation_error', err) : socket.emit('quiz_activation_success', res);
-        });
-    });
-
-    socket.on('student_checkin', (data) => {
-        grpcClient.StudentAttendenceCheckIn(data, (err, res) => {
-            err ? socket.emit('checkin_error', err) : socket.emit('checkin_success', res);
-        });
-    });
-
-    socket.on('request_quiz_questions', (data) => {
-        grpcClient.StudentQuizRequest(data, (err, res) => {
-            err ? socket.emit('quiz_questions_error', err) : socket.emit('quiz_questions', res);
-        });
-    });
-
-    // --- CENTRAL CLEANUP ---
+    // --- CLEANUP ---
     socket.on('disconnect', () => {
         console.log(`[BRIDGE] Disconnected: ${sid}. Cleaning up streams...`);
-        
-        // Cancel/End all active gRPC streams for this socket
         Object.keys(activeStreams).forEach(type => {
             if (activeStreams[type][sid]) {
-                // If it's a client-stream we .end(), if it's server-stream we .cancel()
                 try {
                     activeStreams[type][sid].cancel ? activeStreams[type][sid].cancel() : activeStreams[type][sid].end();
-                } catch (e) {
-                    // Silently catch already-closed streams
-                }
+                } catch (e) {}
                 delete activeStreams[type][sid];
             }
         });
     });
 });
 
+// ==========================================
+// 4. GRACEFUL SHUTDOWN
+// ==========================================
+const gracefulShutdown = () => {
+    console.log('\n[GATEWAY] Closing bridge gracefully...');
+    io.close(() => {
+        server.close(() => {
+            attendanceClient.close();
+            quizClient.close();
+            telemetryClient.close();
+            process.exit(0);
+        });
+    });
+};
+
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
 
 const PORT = process.env.PORT || 3003;
 server.listen(PORT, () => {
     console.log(`Server Gateway running on http://localhost:${PORT}`);
-});
-
-
-
-const gracefulShutdown = () => {
-    console.log('\n[GATEWAY] Shutdown signal received. Closing bridge gracefully...');
-
-    // 1. Stop accepting new Socket.io connections
-    io.close(() => {
-        console.log('[GATEWAY] Socket.io server closed.');
-    });
-
-    // 2. Stop the HTTP server
-    server.close(() => {
-        console.log('[GATEWAY] HTTP server closed.');
-
-        // 3. Properly close the gRPC Client connection
-        // This clears up internal HTTP/2 channels
-        grpcClient.close();
-        console.log('[GATEWAY] gRPC Client connection closed.');
-
-        process.exit(0);
-    });
-
-    // Forced exit if it takes too long (e.g., hanging streams)
-    setTimeout(() => {
-        console.error('[GATEWAY] Forced shutdown due to timeout.');
-        process.exit(1);
-    }, 5000);
-};
-
-// Listen for Ctrl+C (SIGINT) and Termination (SIGTERM)
-process.on('SIGINT', gracefulShutdown);
-process.on('SIGTERM', gracefulShutdown);
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (err) => {
-    console.error('[FATAL] Uncaught Exception thrown:', err);
-    // Optional: process.exit(1) if you want it to restart, 
-    // but usually, for a Gateway, we just want to log it.
 });

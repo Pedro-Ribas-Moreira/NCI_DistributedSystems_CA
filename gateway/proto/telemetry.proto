@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package telemetry;
+
+service TelemetryService {
+  // Client-side streaming for engagement pings 
+  rpc StudentTelemetry (stream StudentTelemetryRequest) returns (StudentTelemetryResponse);
+}
+
+message StudentTelemetryRequest {
+  string student_id = 1;
+  string activity_type = 2;
+  string activity_timestamp = 3;
+}
+
+message StudentTelemetryResponse {
+  string student_id = 1;
+  string telemetry_status = 2;
+  string message = 3;
+}
